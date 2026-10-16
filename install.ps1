@@ -184,7 +184,7 @@ try {
     if (-not $NoMcp) {
         Write-Host ''
         Write-Host '  Optional - let Claude use it by itself (connector):' -ForegroundColor White
-        Write-Host '    Claude Code:    claude mcp add videolearn -- "' -NoNewline; Write-Host "$mcpExe`"" -ForegroundColor Yellow
+        Write-Host ('    Claude Code:    claude mcp add videolearn -- "' + $mcpExe + '"') -ForegroundColor Yellow
         Write-Host '    Claude Desktop: Settings > Developer > Edit Config, add under "mcpServers":'
         $json = ('"videolearn": { "command": "' + ($mcpExe -replace '\\', '\\') + '" }')
         Write-Host "      $json" -ForegroundColor Yellow
