@@ -1,12 +1,12 @@
-"""Draws the VideoLearn 4Claude icon: a screen with a voice waveform and the red tracking ring around the pointer.
+"""Draws the VideoLearn icon: a screen with a voice waveform and the red tracking ring around the pointer.
 
-Run: python tools/make_icon.py   -> videolearn4claude/ui/icon.png and icon.ico
+Run: python tools/make_icon.py   -> videolearn/ui/icon.png and icon.ico
 """
 from pathlib import Path
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
-OUT = Path(__file__).resolve().parent.parent / "videolearn4claude" / "ui"
+OUT = Path(__file__).resolve().parent.parent / "videolearn" / "ui"
 S = 2048                      # draw big, shrink for smooth edges
 
 

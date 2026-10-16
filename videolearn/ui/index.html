@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>VideoLearn 4Claude</title>
+<title>VideoLearn</title>
 <link rel="icon" type="image/png" href="/icon.png">
 <style>
 :root{
@@ -127,7 +127,7 @@ textarea.gloss{width:100%;min-height:92px;border:1px solid var(--line);border-ra
   <button id="back" class="btn icon hidden" data-i-title="back" aria-label="Back">
     <svg width="9" height="15" viewBox="0 0 9 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 1.5 1.5 7.5l6 6"/></svg>
   </button>
-  <span class="title" id="barTitle">VideoLearn 4Claude</span>
+  <span class="title" id="barTitle">VideoLearn</span>
   <span class="grow"></span>
   <span class="saved hidden" id="saved"></span>
   <span class="pill warn hidden" id="count"></span>
@@ -142,7 +142,7 @@ textarea.gloss{width:100%;min-height:92px;border:1px solid var(--line);border-ra
   <section id="home">
     <div class="hero">
       <img class="appicon" src="/icon.png" alt="" width="108" height="108">
-      <h1>VideoLearn 4Claude</h1>
+      <h1>VideoLearn</h1>
       <p class="lead" data-i="lead"></p>
     </div>
 
@@ -291,7 +291,7 @@ function show(v){
   $('#back').classList.toggle('hidden', v === 'home');
   for (const id of ['count','next','copy','reveal','saved']) $('#'+id).classList.toggle('hidden', !ed);
   if (!ed) $('#applyAll').classList.add('hidden');
-  $('#barTitle').textContent = ed ? D.video : 'VideoLearn 4Claude';
+  $('#barTitle').textContent = ed ? D.video : 'VideoLearn';
   window.scrollTo(0,0);
 }
 $('#back').onclick = () => { if (view === 'busy' && JOB_RUNNING) return; $('#vid').pause(); show('home'); };

@@ -1,16 +1,16 @@
 <#
-  VideoLearn 4Claude - Windows installer (per-user, no admin rights needed).
+  VideoLearn - Windows installer (per-user, no admin rights needed).
 
-  Easiest:   double-click "Install VideoLearn 4Claude.bat"
-  One line:  irm https://raw.githubusercontent.com/sasyevadam01/videolearn-4claude/main/install.ps1 | iex
+  Easiest:   double-click "Install VideoLearn.bat"
+  One line:  irm https://raw.githubusercontent.com/sasyevadam01/videolearn/main/install.ps1 | iex
 
   What it does: installs the fast Python manager "uv" (only if missing), a private Python 3.12 + the app
-  in %LOCALAPPDATA%\VideoLearn4Claude, ffmpeg (only if missing), the NVIDIA CUDA libraries (only if an
+  in %LOCALAPPDATA%\VideoLearn, ffmpeg (only if missing), the NVIDIA CUDA libraries (only if an
   NVIDIA GPU is present), downloads the speech model once, and creates Desktop + Start menu shortcuts.
   Nothing outside that folder, your shortcuts and ~/.cache/huggingface (the model) is touched.
 
   Options (when running the file directly):
-    -InstallDir <path>   where to install (default %LOCALAPPDATA%\VideoLearn4Claude)
+    -InstallDir <path>   where to install (default %LOCALAPPDATA%\VideoLearn)
     -Source <folder|zip> install from a local folder or a zip URL instead of GitHub
     -NoGpu               do not install the NVIDIA CUDA libraries
     -NoMcp               do not install the Claude connector (MCP server)
@@ -19,7 +19,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'VideoLearn4Claude'),
+    [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'VideoLearn'),
     [string]$Source = '',
     [switch]$NoGpu,
     [switch]$NoMcp,
@@ -33,7 +33,7 @@ $ProgressPreference = 'SilentlyContinue'      # Invoke-WebRequest is ~10x faster
 # Antivirus / company proxies re-sign HTTPS traffic with a certificate that only Windows trusts: make uv use the Windows store.
 $env:UV_SYSTEM_CERTS = '1'
 $env:UV_NATIVE_TLS = '1'
-$Repo = 'sasyevadam01/videolearn-4claude'
+$Repo = 'sasyevadam01/videolearn'
 $Total = 7
 
 function Step([int]$n, [string]$msg) { Write-Host ''; Write-Host "[$n/$Total] $msg" -ForegroundColor Cyan }
@@ -45,7 +45,7 @@ function Native([scriptblock]$cmd) {
     try { & $cmd 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray } } finally { $ErrorActionPreference = $old }
 }
 
-if ($env:OS -ne 'Windows_NT') { throw 'This installer is for Windows. On other systems: pip install "videolearn4claude[mcp]" (see README).' }
+if ($env:OS -ne 'Windows_NT') { throw 'This installer is for Windows. On other systems: pip install "videolearn[mcp]" (see README).' }
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $tmp = Join-Path ([IO.Path]::GetTempPath()) ('vl4c-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
@@ -54,7 +54,7 @@ try { Start-Transcript -Path (Join-Path $InstallDir 'install.log') -Append | Out
 
 try {
     Write-Host ''
-    Write-Host '  VideoLearn 4Claude - installer' -ForegroundColor White
+    Write-Host '  VideoLearn - installer' -ForegroundColor White
     Write-Host "  Install folder: $InstallDir" -ForegroundColor DarkGray
     if ($InstallDir.Length -gt 100) { Write-Warning 'That install path is very long; Windows tools can misbehave above 260 characters. A shorter -InstallDir is safer.' }
     $free = (Get-PSDrive -Name ((Split-Path $InstallDir -Qualifier).TrimEnd(':'))).Free
@@ -114,7 +114,7 @@ try {
     $py = Join-Path $venv 'Scripts\python.exe'
     $extras = if ($NoMcp) { '' } else { '[mcp]' }
     $uri = ([Uri]$srcCopy).AbsoluteUri
-    Native { & $uv pip install --python $py --reinstall-package videolearn4claude "videolearn4claude$extras @ $uri" }
+    Native { & $uv pip install --python $py --reinstall-package videolearn "videolearn$extras @ $uri" }
     if ($LASTEXITCODE -ne 0) { throw 'Installing the app failed.' }
 
     # 4 --------------------------------------------------------------- ffmpeg
@@ -152,13 +152,13 @@ try {
     Step 6 'Speech model'
     if ($SkipModel) { Info 'skipped (-SkipModel): it will download on first use' }
     else {
-        Native { & $py -m videolearn4claude.prefetch }
+        Native { & $py -m videolearn.prefetch }
         if ($LASTEXITCODE -ne 0) { Write-Warning 'The model could not be downloaded now; it will download on first use.' }
     }
 
     # 7 ------------------------------------------------------------ shortcuts
     Step 7 'Shortcuts'
-    $ico = (& $py -c "import videolearn4claude, os; print(os.path.join(os.path.dirname(videolearn4claude.__file__), 'ui', 'icon.ico'))").Trim()
+    $ico = (& $py -c "import videolearn, os; print(os.path.join(os.path.dirname(videolearn.__file__), 'ui', 'icon.ico'))").Trim()
     Copy-Item $ico (Join-Path $InstallDir 'icon.ico') -Force
     $uninst = if ($local) { Join-Path $local 'uninstall.ps1' } else { Join-Path $srcCopy 'uninstall.ps1' }
     if (Test-Path $uninst) { Copy-Item $uninst (Join-Path $InstallDir 'uninstall.ps1') -Force }
@@ -167,20 +167,32 @@ try {
         $ws = New-Object -ComObject WScript.Shell
         $targets = @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs'))
         foreach ($dir in $targets) {
-            $lnk = $ws.CreateShortcut((Join-Path $dir 'VideoLearn 4Claude.lnk'))
+            $lnk = $ws.CreateShortcut((Join-Path $dir 'VideoLearn.lnk'))
             $lnk.TargetPath = Join-Path $venv 'Scripts\pythonw.exe'
-            $lnk.Arguments = '-m videolearn4claude.app'
+            $lnk.Arguments = '-m videolearn.app'
             $lnk.WorkingDirectory = $InstallDir
             $lnk.IconLocation = (Join-Path $InstallDir 'icon.ico') + ',0'
-            $lnk.Description = 'VideoLearn 4Claude - give Claude ears for your screen recordings'
+            $lnk.Description = 'VideoLearn - give Claude ears for your screen recordings'
             $lnk.Save()
         }
         Info 'created on the Desktop and in the Start menu'
+
+        # The project used to be called "VideoLearn 4Claude": remove that older install and its icons (your glossary
+        # and recent list are copied over by the app on first start).
+        $legacyDir = Join-Path $env:LOCALAPPDATA 'VideoLearn4Claude'
+        foreach ($d in $targets) { Remove-Item -LiteralPath (Join-Path $d 'VideoLearn 4Claude.lnk') -Force -ErrorAction SilentlyContinue }
+        if ((Test-Path -LiteralPath $legacyDir) -and ($legacyDir -ne $InstallDir)) {
+            Info 'removing the older "VideoLearn 4Claude" install'
+            Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith($legacyDir, [StringComparison]::OrdinalIgnoreCase) } |
+                Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            Remove-Item -LiteralPath $legacyDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     $mcpExe = Join-Path $venv 'Scripts\videolearn-mcp.exe'
     Write-Host ''
-    Write-Host '  Done! Open "VideoLearn 4Claude" from your Desktop or Start menu.' -ForegroundColor Green
+    Write-Host '  Done! Open "VideoLearn" from your Desktop or Start menu.' -ForegroundColor Green
     if (-not $NoMcp) {
         Write-Host ''
         Write-Host '  Optional - let Claude use it by itself (connector):' -ForegroundColor White

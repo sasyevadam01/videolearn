@@ -8,7 +8,7 @@ from .core import process, read_glossary
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
-        prog="videolearn4claude",
+        prog="videolearn",
         description="Turn a narrated screen recording into a Markdown report Claude can read "
                     "(speech transcript + frames + mouse-pointer position, synchronized).")
     p.add_argument("video")

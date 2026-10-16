@@ -1,6 +1,6 @@
-"""VideoLearn 4Claude: a tiny local web server + a clean app-style browser window.
+"""VideoLearn: a tiny local web server + a clean app-style browser window.
 
-Run `python -m videolearn4claude.app` (or use the "VideoLearn 4Claude" desktop shortcut).
+Run `python -m videolearn.app` (or use the "VideoLearn" desktop shortcut).
 Everything stays on this PC: the server only listens on 127.0.0.1 and closes
 itself a couple of minutes after the window is closed.
 """
@@ -112,7 +112,7 @@ def run_job(video: Path, model: str, language: str) -> None:
 
 # ---------- HTTP ----------
 class Handler(BaseHTTPRequestHandler):
-    server_version = "videolearn4claude"
+    server_version = "videolearn"
 
     def log_message(self, *a):  # silence
         pass
@@ -182,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
         if p in ("/icon.png", "/favicon.ico"):
             return self._file(UI.with_name("icon.png"))
         if p == "/api/ping":
-            return self._json({"app": "videolearn4claude"})
+            return self._json({"app": "videolearn"})
         if p == "/api/state":
             BEAT[0] = time.time()
             return self._json({"job": JOB, "history": load_history()})
@@ -264,7 +264,7 @@ class Handler(BaseHTTPRequestHandler):
 def _is_ours(port: int) -> bool:
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/ping", timeout=1.5) as r:
-            return json.load(r).get("app") == "videolearn4claude"
+            return json.load(r).get("app") == "videolearn"
     except (OSError, ValueError):
         return False
 

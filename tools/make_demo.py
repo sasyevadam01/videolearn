@@ -1,7 +1,7 @@
 """Builds docs/demo/demo.mp4: a neutral, invented "workshop floor plan" screen recording.
 
 A synthetic (Windows SAPI) English voice explains the plan while a mouse pointer moves between the
-areas. It is the sample used in the README, and a ready-made test video for VideoLearn 4Claude.
+areas. It is the sample used in the README, and a ready-made test video for VideoLearn.
 
 Run (Windows, needs ffmpeg + Pillow):  python tools/make_demo.py
 """

@@ -1,11 +1,11 @@
-"""VideoLearn 4Claude as an MCP server (a "connector" for Claude Desktop / Claude Code).
+"""VideoLearn as an MCP server (a "connector" for Claude Desktop / Claude Code).
 
 Gives Claude three tools:
   * watch_video   - transcribe a narrated screen recording and track the mouse (runs locally)
   * read_report   - re-read a report made earlier, without reprocessing
   * show_moments  - look at the frames where the speaker was pointing (image content)
 
-Install with `pip install "videolearn4claude[mcp]"` and run `videolearn-mcp` (stdio).
+Install with `pip install "videolearn[mcp]"` and run `videolearn-mcp` (stdio).
 """
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ from mcp.server.fastmcp import Context, FastMCP, Image
 from .core import HOME, process, read_glossary
 
 mcp = FastMCP(
-    "VideoLearn 4Claude",
+    "VideoLearn",
     instructions=(
         "Use watch_video when the user shares a screen recording with a voice-over (a walkthrough, a tutorial, "
         "a layout explained while moving the mouse). It returns what was said, sentence by sentence, with the "

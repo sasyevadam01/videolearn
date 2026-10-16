@@ -1,12 +1,15 @@
-# VideoLearn 4Claude
+# VideoLearn
 
-**Give Claude ears for your screen recordings.**
+**An open-source MCP connector for Claude: give Claude ears for your screen recordings.**
+
+> VideoLearn is an independent, open-source (MIT) project and an **MCP connector *for* Claude** (Claude Desktop, Claude Code),
+> plus a small desktop app. It is not made by, affiliated with or endorsed by Anthropic.
 
 Claude can't take video or audio as input. If you record your screen while explaining something out loud
 ("this is the cutting station, then the parts go *here*..."), all Claude can ever get from the file is a mouse pointer
 moving around: the voice, and therefore the explanation, is lost.
 
-VideoLearn 4Claude recovers both channels and **synchronizes them**. For every sentence you said, it gives Claude the
+VideoLearn recovers both channels and **synchronizes them**. For every sentence you said, it gives Claude the
 words, the frame at that moment with **the mouse pointer circled in red**, a zoom on the pointer, and where it was
 (in % of the screen). Everything runs **on your own computer**: nothing is uploaded anywhere.
 
@@ -50,16 +53,16 @@ the report Claude receives:
 Open **PowerShell** and paste:
 
 ```powershell
-irm https://raw.githubusercontent.com/sasyevadam01/videolearn-4claude/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/sasyevadam01/videolearn/main/install.ps1 | iex
 ```
 
-Or [download the ZIP](https://github.com/sasyevadam01/videolearn-4claude/archive/refs/heads/main.zip), unpack it and
-double-click **`Install VideoLearn 4Claude.bat`**.
+Or [download the ZIP](https://github.com/sasyevadam01/videolearn/archive/refs/heads/main.zip), unpack it and
+double-click **`Install VideoLearn.bat`**.
 
 The installer is per-user (no administrator rights) and takes a few minutes. It:
 
 1. installs [`uv`](https://github.com/astral-sh/uv) (only if you don't have it), which provides a private Python 3.12 and installs the packages in seconds;
-2. installs the app and the connector into `%LOCALAPPDATA%\VideoLearn4Claude`;
+2. installs the app and the connector into `%LOCALAPPDATA%\VideoLearn`;
 3. downloads `ffmpeg` (only if you don't have it);
 4. **if an NVIDIA graphics card is present**, installs the CUDA libraries (~2 GB) so the GPU is used;
 5. downloads the speech model once (~1.6 GB, stored in the Hugging Face cache);
@@ -74,7 +77,7 @@ To remove everything: run `uninstall.ps1` (add `-RemoveUserData` / `-RemoveModel
 
 ## Use it
 
-1. Open **VideoLearn 4Claude** from the Desktop.
+1. Open **VideoLearn** from the Desktop.
 2. Click **Choose video…** (or paste a path). A progress bar shows the steps.
 3. The editor opens: click **▶** to replay a sentence, jump between doubtful words with **Next to check** (`Ctrl+Enter`),
    click a thumbnail to see the frame large.
@@ -96,7 +99,7 @@ If you run the same video again, the saved transcription is reused (a few second
 
 ## Use it from Claude (connector)
 
-The installer puts an MCP server in `%LOCALAPPDATA%\VideoLearn4Claude\venv\Scripts\videolearn-mcp.exe`. It gives Claude three tools:
+The installer puts an MCP server in `%LOCALAPPDATA%\VideoLearn\venv\Scripts\videolearn-mcp.exe`. It gives Claude three tools:
 
 | Tool | What it does |
 |---|---|
@@ -107,7 +110,7 @@ The installer puts an MCP server in `%LOCALAPPDATA%\VideoLearn4Claude\venv\Scrip
 **Claude Code**
 
 ```powershell
-claude mcp add videolearn -- "%LOCALAPPDATA%\VideoLearn4Claude\venv\Scripts\videolearn-mcp.exe"
+claude mcp add videolearn -- "%LOCALAPPDATA%\VideoLearn\venv\Scripts\videolearn-mcp.exe"
 ```
 
 **Claude Desktop**: *Settings → Developer → Edit Config*, then add (use your real path, with doubled backslashes):
@@ -115,7 +118,7 @@ claude mcp add videolearn -- "%LOCALAPPDATA%\VideoLearn4Claude\venv\Scripts\vide
 ```json
 {
   "mcpServers": {
-    "videolearn": { "command": "C:\\Users\\YOU\\AppData\\Local\\VideoLearn4Claude\\venv\\Scripts\\videolearn-mcp.exe" }
+    "videolearn": { "command": "C:\\Users\\YOU\\AppData\\Local\\VideoLearn\\venv\\Scripts\\videolearn-mcp.exe" }
   }
 }
 ```
@@ -124,7 +127,8 @@ Then ask: *"Watch `C:\Videos\walkthrough.mp4` and explain, step by step, what th
 
 Notes: the connector is a **local** tool, so it works where Claude runs on your own computer (Claude Desktop, Claude Code).
 It is not a remote "web connector" for claude.ai, and the video must be on the same machine. I tested it end to end with the
-official MCP Python client (tool list, progress, images, errors); I have **not** yet tested it inside Claude Desktop or Claude Code themselves.
+official MCP Python client (tool list, progress, images, errors), and Claude Code connects to it (`claude mcp list` shows ✔ Connected).
+I have **not** yet run a full conversation through Claude Desktop or Claude Code, so please tell me if something is off.
 
 ## How it works
 
@@ -143,7 +147,7 @@ flowchart LR
 The pointer tracker needs no template: for each frame it takes the difference from the median of the frames around it
 (±20 s), keeps small blobs that contain both dark and light pixels (like a cursor), and follows the one that continues the
 previous position. It handles a pointer that rests for a long time (it merges into the median and would leave a "ghost" when
-it moves) and slide changes. See [`videolearn4claude/core.py`](videolearn4claude/core.py).
+it moves) and slide changes. See [`videolearn/core.py`](videolearn/core.py).
 
 ## Speed
 
@@ -179,19 +183,19 @@ Without an NVIDIA GPU everything still works on the CPU, just slower. AMD / Inte
 - The app is a small web server bound to `127.0.0.1` only; it rejects requests with a foreign `Host` header and requires a custom
   header for every action. It exits by itself two minutes after you close its window.
 - The connector reads the video path Claude asks for and writes the report next to it. Don't give it to a client you don't trust.
-- Your data stays in `%USERPROFILE%\.videolearn4claude` (glossary, recent list, error log).
+- Your data stays in `%USERPROFILE%\.videolearn` (glossary, recent list, error log).
 
 ## Develop
 
 ```powershell
-git clone https://github.com/sasyevadam01/videolearn-4claude
-cd videolearn-4claude
+git clone https://github.com/sasyevadam01/videolearn
+cd videolearn
 uv venv; uv pip install -e ".[mcp]"          # add ".[gpu]" for NVIDIA libraries
 python -m unittest discover -s tests         # unit tests (no Whisper or ffmpeg needed)
 python tools/make_demo.py                    # rebuilds docs/demo/demo.mp4 (Windows voice)
 ```
 
-Layout: `videolearn4claude/core.py` (pipeline), `app.py` + `ui/index.html` (the app), `mcp_server.py` (connector),
+Layout: `videolearn/core.py` (pipeline), `app.py` + `ui/index.html` (the app), `mcp_server.py` (connector),
 `cli.py`, `prefetch.py`, `install.ps1` / `uninstall.ps1`, `tools/` (icon and demo generators), `tests/`.
 Issues and pull requests are welcome.
 
@@ -204,8 +208,10 @@ and the [Model Context Protocol](https://modelcontextprotocol.io) Python SDK.
 
 ## Disclaimer
 
-VideoLearn 4Claude is an independent, community project. It is **not affiliated with, endorsed by or sponsored by
-Anthropic**. "Claude" is a trademark of Anthropic, PBC; the name only says what the tool is for.
+VideoLearn is an independent, community project. It is **not affiliated with, endorsed by or sponsored by
+Anthropic**. "Claude" is a trademark of Anthropic, PBC and is used here only to say which assistant the connector is for.
+
+Previously published as *VideoLearn 4Claude*; the old repository address redirects here.
 
 ## License
 

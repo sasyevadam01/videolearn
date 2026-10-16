@@ -3,9 +3,9 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "videolearn4claude"
+name = "videolearn"
 version = "0.1.0"
-description = "VideoLearn 4Claude: give Claude ears for your screen recordings. Speech transcript + frames + mouse-pointer position, synchronized, 100% local."
+description = "VideoLearn: an open-source MCP connector for Claude that gives it ears for your screen recordings. Speech transcript + frames + mouse-pointer position, synchronized, 100% local."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
@@ -37,19 +37,19 @@ gpu = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sasyevadam01/videolearn-4claude"
-Issues = "https://github.com/sasyevadam01/videolearn-4claude/issues"
+Homepage = "https://github.com/sasyevadam01/videolearn"
+Issues = "https://github.com/sasyevadam01/videolearn/issues"
 
 [project.scripts]
-videolearn = "videolearn4claude.cli:main"
-videolearn-mcp = "videolearn4claude.mcp_server:main"
-videolearn-prefetch = "videolearn4claude.prefetch:main"
+videolearn = "videolearn.cli:main"
+videolearn-mcp = "videolearn.mcp_server:main"
+videolearn-prefetch = "videolearn.prefetch:main"
 
 [project.gui-scripts]
-videolearn-app = "videolearn4claude.app:main"
+videolearn-app = "videolearn.app:main"
 
 [tool.setuptools]
-packages = ["videolearn4claude"]
+packages = ["videolearn"]
 
 [tool.setuptools.package-data]
-videolearn4claude = ["ui/*"]
+videolearn = ["ui/*"]

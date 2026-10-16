@@ -159,7 +159,20 @@ def flag_words(segments: list[dict], threshold: float, terms: set[str]) -> None:
                 w["flag"] = True
 
 
-HOME = Path.home() / ".videolearn4claude"      # user data: glossary, history, logs, optional ffmpeg
+HOME = Path.home() / ".videolearn"      # user data: glossary, history, logs, optional ffmpeg
+
+
+def _migrate_legacy_home() -> None:
+    """The project used to be called "VideoLearn 4Claude" (data in ~/.videolearn4claude): keep the user's data."""
+    legacy = Path.home() / ".videolearn4claude"
+    try:
+        if legacy.is_dir() and not HOME.exists():
+            shutil.copytree(legacy, HOME)
+    except OSError:
+        pass
+
+
+_migrate_legacy_home()
 
 
 def _cuda_dirs() -> list[Path]:

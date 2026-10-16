@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from videolearn4claude import core
+from videolearn import core
 
 
 def word(w, start, end, p=0.9):
