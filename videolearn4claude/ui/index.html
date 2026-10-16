@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>VideoLearn 4Claude</title>
+<link rel="icon" type="image/png" href="/icon.png">
+<style>
+:root{
+  --bg:#f5f5f7; --card:#ffffff; --text:#1d1d1f; --sub:#6e6e73; --faint:#86868b;
+  --line:rgba(0,0,0,.09); --fill:#ececf0; --fill-hover:#e2e2e8;
+  --blue:#0071e3; --blue-hover:#0a64c8; --blue-soft:rgba(0,113,227,.10);
+  --green:#1d9d4a; --orange:#b25e00; --orange-soft:#fff1d6; --hl:#fff0b3; --hl-text:#5e4400;
+  --r:14px; --shadow:0 1px 2px rgba(0,0,0,.04),0 8px 28px rgba(0,0,0,.06);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+button,input,textarea,select{font:inherit;color:inherit}
+.hidden{display:none!important}
+
+/* top bar */
+.bar{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:10px;min-height:52px;padding:8px 20px;
+  background:rgba(245,245,247,.78);backdrop-filter:saturate(180%) blur(22px);-webkit-backdrop-filter:saturate(180%) blur(22px);
+  border-bottom:1px solid var(--line)}
+.bar .title{font-weight:600;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34ch}
+.bar .grow{flex:1}
+.bar .saved{color:var(--faint);font-size:13px;white-space:nowrap}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:34px;padding:0 15px;border:0;border-radius:999px;
+  background:var(--fill);font-weight:500;font-size:14px;cursor:pointer;white-space:nowrap;transition:background .15s,transform .05s}
+.btn:hover{background:var(--fill-hover)}.btn:active{transform:scale(.98)}
+.btn.primary{background:var(--blue);color:#fff}.btn.primary:hover{background:var(--blue-hover)}
+.btn.soft{background:var(--blue-soft);color:var(--blue)}.btn.soft:hover{background:rgba(0,113,227,.17)}
+.btn.big{height:48px;padding:0 28px;font-size:17px}
+.btn.icon{width:34px;padding:0}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid rgba(0,113,227,.35);outline-offset:1px}
+
+/* layout */
+main{max-width:1120px;margin:0 auto;padding:28px 20px 60px}
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow)}
+
+/* home */
+.hero{text-align:center;padding:28px 0 22px}
+.appicon{display:block;width:108px;height:108px;margin:0 auto 14px;filter:drop-shadow(0 10px 18px rgba(30,70,200,.28))}
+h1{font-size:34px;line-height:1.1;font-weight:700;letter-spacing:-.02em;margin:0 0 10px}
+.lead{color:var(--sub);font-size:17px;max-width:46ch;margin:0 auto}
+.pick{max-width:640px;margin:20px auto 0;padding:30px;text-align:center}
+.or{display:flex;align-items:center;gap:12px;color:var(--faint);font-size:13px;margin:22px 0 14px}
+.or:before,.or:after{content:"";flex:1;height:1px;background:var(--line)}
+.pathrow{display:flex;gap:8px}
+.pathrow input{flex:1;height:38px;border:1px solid var(--line);border-radius:10px;padding:0 12px;background:#fafafc;min-width:0}
+.opts{max-width:640px;margin:14px auto 0}
+.opts summary{cursor:pointer;color:var(--sub);font-size:14px;padding:8px 4px;list-style:none;text-align:center}
+.opts summary::-webkit-details-marker{display:none}
+.opts[open] summary{color:var(--text)}
+.optbody{padding:18px 22px;margin-top:6px}
+.row{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:10px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border-bottom:0}
+.row small,.sub{display:block;color:var(--faint);font-size:12.5px}
+.seg2{display:inline-flex;background:var(--fill);border-radius:9px;padding:2px}
+.seg2 button{border:0;background:transparent;padding:5px 13px;border-radius:7px;font-size:13.5px;cursor:pointer;color:var(--sub)}
+.seg2 button.on{background:#fff;color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.14);font-weight:500}
+select{height:32px;border:1px solid var(--line);border-radius:8px;background:#fff;padding:0 8px}
+textarea.gloss{width:100%;min-height:92px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:#fafafc;resize:vertical;font-size:14px}
+.recent{max-width:640px;margin:30px auto 0}
+.recent h2{font-size:13px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.04em;margin:0 0 8px 4px}
+.ritem{display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.ritem:last-child{border-bottom:0}.ritem .n{flex:1;min-width:0}.ritem .n b{display:block;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ritem .n span{color:var(--faint);font-size:13px}
+
+/* busy */
+.busy{max-width:520px;margin:60px auto 0;padding:34px}
+.busy h2{margin:0 0 4px;font-size:22px}.busy .file{color:var(--sub);margin-bottom:22px;word-break:break-all}
+.progress{height:8px;border-radius:99px;background:var(--fill);overflow:hidden}
+.progress i{display:block;height:100%;width:0;background:var(--blue);border-radius:99px;transition:width .6s ease}
+.pct{display:flex;justify-content:space-between;color:var(--sub);font-size:13px;margin:8px 0 18px}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:flex;align-items:center;gap:10px;padding:7px 0;color:var(--faint)}
+.steps li .dot{width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;font-size:12px;color:#fff;flex:none}
+.steps li.now{color:var(--text);font-weight:500}.steps li.now .dot{border-color:var(--blue);border-top-color:transparent;animation:spin 1s linear infinite}
+.steps li.ok{color:var(--sub)}.steps li.ok .dot{background:var(--green);border-color:var(--green)}
+@keyframes spin{to{transform:rotate(360deg)}}
+.hint{margin-top:18px;color:var(--faint);font-size:13px}
+.err{background:#fff0f0;color:#a4262c;border-radius:10px;padding:12px 14px;margin:14px 0;font-size:14px;word-break:break-word}
+
+/* editor */
+.editor{display:grid;grid-template-columns:260px minmax(0,1fr);gap:22px;align-items:start}
+.side{position:sticky;top:70px}
+.player{overflow:hidden;background:#000;border-radius:var(--r);box-shadow:var(--shadow)}
+.player video{display:block;width:100%;max-height:62vh;background:#000}
+.help{color:var(--sub);font-size:13px;margin:14px 4px 0;line-height:1.55}
+.help b{font-weight:600;color:var(--text)}
+.pill{display:inline-flex;align-items:center;height:28px;padding:0 12px;border-radius:99px;font-size:13px;font-weight:500;white-space:nowrap}
+.pill.warn{background:var(--orange-soft);color:var(--orange)}.pill.good{background:#e3f6e9;color:var(--green)}
+.seg{display:grid;grid-template-columns:64px 88px minmax(0,1fr);gap:14px;align-items:start;padding:14px;margin-bottom:12px;transition:box-shadow .2s}
+.seg.now{box-shadow:0 0 0 2px var(--blue),var(--shadow)}
+.meta{display:flex;flex-direction:column;align-items:flex-start;gap:7px;color:var(--faint);font-size:12.5px;font-variant-numeric:tabular-nums}
+.play{width:34px;height:34px;border-radius:50%;border:0;background:var(--blue-soft);color:var(--blue);cursor:pointer;display:grid;place-items:center}
+.play:hover{background:rgba(0,113,227,.2)}
+.thumb{width:88px;height:88px;border-radius:10px;object-fit:cover;border:1px solid var(--line);cursor:zoom-in;background:#fff}
+.txt{outline:none;padding:7px 10px;margin:-4px -4px;border-radius:10px;min-height:2em;font-size:16px;line-height:1.6;transition:background .15s}
+.txt:hover{background:#f6f6f8}.txt:focus{background:#fff;box-shadow:0 0 0 3px rgba(0,113,227,.28)}
+.lo{background:var(--hl);color:var(--hl-text);border-radius:5px;padding:1px 4px;box-shadow:inset 0 -2px 0 rgba(180,130,0,.35);cursor:pointer}
+.lo[data-sug]::after{content:" → " attr(data-sug);font-size:.82em;opacity:.75}
+
+/* overlays */
+#lightbox{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.55);backdrop-filter:blur(8px);display:grid;place-items:center;padding:24px;cursor:zoom-out}
+#lightbox figure{margin:0;max-height:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
+#lightbox img{max-height:calc(100vh - 110px);max-width:min(92vw,900px);border-radius:12px;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.4)}
+#lightbox figcaption{color:#fff;font-size:15px;max-width:70ch;text-align:center}
+#toast{position:fixed;left:50%;bottom:26px;transform:translate(-50%,20px);opacity:0;pointer-events:none;background:rgba(30,30,32,.92);color:#fff;
+  padding:10px 18px;border-radius:99px;font-size:14px;transition:.25s;z-index:60}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+#offline{background:#fff0f0;color:#a4262c;text-align:center;padding:10px;font-size:14px}
+
+@media(max-width:820px){.editor{grid-template-columns:1fr}.side{position:static}.seg{grid-template-columns:1fr}.thumb{width:100%;height:150px}}
+</style>
+</head>
+<body>
+<div id="offline" class="hidden" data-i="offline"></div>
+
+<header class="bar">
+  <button id="back" class="btn icon hidden" data-i-title="back" aria-label="Back">
+    <svg width="9" height="15" viewBox="0 0 9 15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.5 1.5 1.5 7.5l6 6"/></svg>
+  </button>
+  <span class="title" id="barTitle">VideoLearn 4Claude</span>
+  <span class="grow"></span>
+  <span class="saved hidden" id="saved"></span>
+  <span class="pill warn hidden" id="count"></span>
+  <button class="btn hidden" id="applyAll"></button>
+  <button class="btn soft hidden" id="next" data-i="next" data-i-title="nextTip"></button>
+  <button class="btn hidden" id="copy" data-i="copy"></button>
+  <button class="btn hidden" id="reveal" data-i="reveal"></button>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="home">
+    <div class="hero">
+      <img class="appicon" src="/icon.png" alt="" width="108" height="108">
+      <h1>VideoLearn 4Claude</h1>
+      <p class="lead" data-i="lead"></p>
+    </div>
+
+    <div class="card pick">
+      <button class="btn primary big" id="pick" data-i="pick"></button>
+      <div class="or" data-i="or"></div>
+      <div class="pathrow">
+        <input id="path" data-i-ph="ph" spellcheck="false">
+        <button class="btn" id="go" data-i="start"></button>
+      </div>
+      <div class="err hidden" id="homeErr"></div>
+    </div>
+
+    <details class="opts">
+      <summary data-i="options"></summary>
+      <div class="card optbody">
+        <div class="row"><div><span data-i="optAcc"></span><small data-i="optAccSub"></small></div>
+          <div class="seg2" id="optModel"><button data-v="precise" class="on" data-i="precise"></button><button data-v="fast" data-i="fast"></button></div></div>
+        <div class="row"><div data-i="optLang"></div>
+          <select id="optLang"><option value="auto" data-i="auto"></option><option value="en">English</option><option value="it">Italiano</option>
+            <option value="es">Español</option><option value="fr">Français</option><option value="de">Deutsch</option><option value="pt">Português</option></select></div>
+        <div class="row"><div data-i="optUi"></div>
+          <select id="optUi"><option value="en">English</option><option value="it">Italiano</option></select></div>
+        <div style="padding-top:12px"><div style="margin-bottom:6px"><span data-i="gloss"></span><small class="sub" data-i="glossSub"></small></div>
+          <textarea class="gloss" id="gloss" spellcheck="false"></textarea>
+          <div style="margin-top:8px;text-align:right"><button class="btn" id="saveGloss" data-i="saveGloss"></button></div></div>
+      </div>
+    </details>
+
+    <div class="recent hidden" id="recent"><h2 data-i="recent"></h2><div class="card" id="recentList"></div></div>
+  </section>
+
+  <!-- BUSY -->
+  <section id="busy" class="hidden">
+    <div class="card busy">
+      <h2 id="busyTitle"></h2>
+      <div class="file" id="busyFile"></div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="pct"><span id="pctText">0%</span><span id="eta"></span></div>
+      <ul class="steps" id="steps">
+        <li data-s="audio"><span class="dot"></span><span data-i="s_audio"></span></li>
+        <li data-s="transcribe"><span class="dot"></span><span data-i="s_transcribe"></span></li>
+        <li data-s="frames"><span class="dot"></span><span data-i="s_frames"></span></li>
+        <li data-s="report"><span class="dot"></span><span data-i="s_report"></span></li>
+      </ul>
+      <div class="err hidden" id="busyErr"></div>
+      <button class="btn hidden" id="busyBack" style="margin-top:6px" data-i="backBtn"></button>
+      <p class="hint" id="busyHint" data-i="hint"></p>
+    </div>
+  </section>
+
+  <!-- EDITOR -->
+  <section id="edit" class="hidden">
+    <div class="editor">
+      <aside class="side">
+        <div class="player"><video id="vid" controls preload="metadata"></video></div>
+        <p class="help" id="help"></p>
+      </aside>
+      <div id="list"></div>
+    </div>
+  </section>
+</main>
+
+<div id="lightbox" class="hidden"><figure><img id="lbImg" alt=""><figcaption id="lbCap"></figcaption></figure></div>
+<div id="toast"></div>
+
+<script>
+/* ---------- translations ---------- */
+const T = {
+ en:{
+  offline:"The app has closed. Open it again from your Desktop or Start menu.", back:"Back",
+  lead:"Turn a screen recording with your voice and mouse into a report Claude can read: every sentence paired with the exact spot you were pointing at.",
+  pick:"Choose video…", picking:"Pick the file in the window…", or:"or paste the file path", ph:"C:\\Videos\\walkthrough.mp4", start:"Start",
+  options:"Options", optAcc:"Accuracy", optAccSub:"“Fast” is quicker but makes more mistakes.", precise:"Precise", fast:"Fast",
+  optLang:"Spoken language", auto:"Automatic", optUi:"Interface language",
+  gloss:"Glossary", glossSub:"Machine names, jargon, acronyms: they improve the transcript and power the correction suggestions.",
+  saveGloss:"Save glossary", glossSaved:"Glossary saved. It applies from the next video.", recent:"Recent", open:"Open",
+  busyTitle:"Processing the video…", busyFail:"Couldn't process the video", failPrefix:"Something went wrong: ",
+  s_audio:"Preparing the audio", s_transcribe:"Transcribing the voice", s_frames:"Following the mouse in the frames", s_report:"Building the report",
+  hint:"You can leave this window open and do something else. It takes a few minutes.", backBtn:"Back",
+  etaLess:"under 1 min in total", etaMin:m=>`about ${m} min in total`, etaGpu:" (graphics card)",
+  next:"Next to check", nextTip:"Shortcut: Ctrl+Enter", copy:"Copy for Claude", reveal:"Show folder",
+  countOne:"1 word to check", countMany:n=>`${n} words to check`, countNone:"All checked ✓",
+  applyOne:"Apply the suggestion", applyMany:k=>`Apply ${k} suggestions`,
+  saving:"Saving…", saved:at=>`Saved ✓ ${at}`, saveErr:"Save error", notSaved:"Not saved: the app is closed",
+  replay:"Replay", suggest:s=>`Maybe: ${s} (double-click to apply)`, confidence:p=>`Confidence ${p}%`,
+  nothing:"Nothing left to check.", copied:"Copied. Paste it into your chat with Claude.", copyPrompt:"Copy this text:",
+  help:"<b>How to correct.</b> Highlighted words are the doubtful ones: click and retype. The ▶ button replays that sentence. <b>Double-click</b> a word with an arrow (→) to apply the glossary suggestion. Click a small picture to see it large. Everything saves by itself.",
+  claudeText:(p,d)=>`Read the report of the video: ${p}\nEach section has the sentence that was said, the mouse position (red circle) and the images in the "segments" folder next to the file (${d}\\segments). Look at the images too, to understand what was being pointed at while speaking.`,
+  err:{busy:"A video is already being processed.", file_not_found:"File not found. Check the path.", report_missing:"Report not found (folder moved or deleted?)"}
+ },
+ it:{
+  offline:"L'app si è chiusa. Riaprila dal Desktop o dal menu Start.", back:"Indietro",
+  lead:"Trasforma un video con la tua voce e il mouse in un rapporto che Claude può leggere: ogni frase con il punto esatto che indicavi.",
+  pick:"Scegli video…", picking:"Scegli il file nella finestra…", or:"oppure incolla il percorso del file", ph:"C:\\Video\\spiegazione.mp4", start:"Avvia",
+  options:"Opzioni", optAcc:"Precisione", optAccSub:"«Veloce» è più rapido ma sbaglia di più le parole.", precise:"Precisa", fast:"Veloce",
+  optLang:"Lingua del parlato", auto:"Automatica", optUi:"Lingua dell'interfaccia",
+  gloss:"Glossario", glossSub:"Nomi di macchine, gergo, sigle: migliorano la trascrizione e alimentano i suggerimenti di correzione.",
+  saveGloss:"Salva glossario", glossSaved:"Glossario salvato. Vale dal prossimo video.", recent:"Recenti", open:"Apri",
+  busyTitle:"Sto elaborando il video…", busyFail:"Non sono riuscito a elaborare il video", failPrefix:"Qualcosa è andato storto: ",
+  s_audio:"Preparo l'audio", s_transcribe:"Trascrivo la voce", s_frames:"Seguo il mouse nei fotogrammi", s_report:"Creo il rapporto",
+  hint:"Puoi lasciare aperta questa finestra e fare altro: ci vuole qualche minuto.", backBtn:"Torna indietro",
+  etaLess:"meno di 1 min in totale", etaMin:m=>`circa ${m} min in totale`, etaGpu:" (scheda video)",
+  next:"Prossima da controllare", nextTip:"Scorciatoia: Ctrl+Invio", copy:"Copia per Claude", reveal:"Mostra cartella",
+  countOne:"1 parola da controllare", countMany:n=>`${n} parole da controllare`, countNone:"Tutto controllato ✓",
+  applyOne:"Applica il suggerimento", applyMany:k=>`Applica i ${k} suggerimenti`,
+  saving:"Salvo…", saved:at=>`Salvato ✓ ${at}`, saveErr:"Errore nel salvataggio", notSaved:"Non salvato: l'app è chiusa",
+  replay:"Riascolta", suggest:s=>`Forse: ${s} (doppio clic per applicare)`, confidence:p=>`Sicurezza ${p}%`,
+  nothing:"Nessuna parola da controllare.", copied:"Copiato. Incollalo nella chat con Claude.", copyPrompt:"Copia questo testo:",
+  help:"<b>Come si corregge.</b> Le parole evidenziate sono quelle dubbie: clicca e riscrivi. Il tasto ▶ riascolta quella frase. Con un <b>doppio clic</b> su una parola con la freccia (→) applichi il suggerimento del glossario. Clicca la piccola immagine per vederla grande. Tutto si salva da solo.",
+  claudeText:(p,d)=>`Leggi il rapporto del video: ${p}\nOgni sezione contiene la frase detta, il punto del mouse (cerchio rosso) e le immagini nella cartella "segments" accanto al file (${d}\\segments). Guarda anche le immagini per capire cosa indicavo mentre parlavo.`,
+  err:{busy:"C'è già un video in elaborazione.", file_not_found:"File non trovato. Controlla il percorso.", report_missing:"Rapporto non trovato (cartella spostata o cancellata?)"}
+ }
+};
+const store = { get(k, d){ try { return localStorage.getItem('vl4c.'+k) ?? d; } catch(e){ return d; } }, set(k, v){ try { localStorage.setItem('vl4c.'+k, v); } catch(e){} } };
+const urlLang = new URLSearchParams(location.search).get('lang');            // ?lang=en|it forces the interface language
+let lang = (urlLang in T ? urlLang : null) || store.get('ui', (navigator.language || 'en').toLowerCase().startsWith('it') ? 'it' : 'en');
+if (!(lang in T)) lang = 'en';
+const t = (k, ...a) => { const v = T[lang][k]; return typeof v === 'function' ? v(...a) : v; };
+
+/* ---------- helpers ---------- */
+const $ = s => document.querySelector(s);
+const api = (p, body) => fetch(p, body === undefined ? {} : {method:'POST', headers:{'Content-Type':'application/json','X-S2C':'1'}, body:JSON.stringify(body)}).then(r => r.json());
+const mmss = t => Math.floor(t/60) + ':' + String(Math.floor(t%60)).padStart(2,'0');
+const toast = m => { const e=$('#toast'); e.textContent=m; e.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>e.classList.remove('on'),2200); };
+const errText = r => (r.code && T[lang].err[r.code]) || r.error || '';
+const opts = {model: store.get('model','precise'), lang: store.get('lang','auto')};
+let view = 'home', handledJob = null, D = null, rid = null, rows = [], stopAt = null, last = null, saveTimer = null;
+let JOB_RUNNING = false, failures = 0, lastJob = null;
+
+function applyI18n(){
+  document.documentElement.lang = lang;
+  document.querySelectorAll('[data-i]').forEach(e => e.textContent = t(e.dataset.i));
+  document.querySelectorAll('[data-i-ph]').forEach(e => e.placeholder = t(e.dataset.iPh));
+  document.querySelectorAll('[data-i-title]').forEach(e => e.title = t(e.dataset.iTitle));
+  $('#help').innerHTML = t('help');
+  if (view === 'edit'){ count(); } if (lastJob && view === 'busy') paintBusy(lastJob);
+  $('#recentList') && renderRecent(renderRecent.items || []);
+}
+
+/* ---------- views ---------- */
+function show(v){
+  view = v;
+  for (const id of ['home','busy','edit']) $('#'+id).classList.toggle('hidden', id !== v);
+  const ed = v === 'edit';
+  $('#back').classList.toggle('hidden', v === 'home');
+  for (const id of ['count','next','copy','reveal','saved']) $('#'+id).classList.toggle('hidden', !ed);
+  if (!ed) $('#applyAll').classList.add('hidden');
+  $('#barTitle').textContent = ed ? D.video : 'VideoLearn 4Claude';
+  window.scrollTo(0,0);
+}
+$('#back').onclick = () => { if (view === 'busy' && JOB_RUNNING) return; $('#vid').pause(); show('home'); };
+
+/* options */
+function paintOpts(){
+  [...$('#optModel').children].forEach(x => x.classList.toggle('on', x.dataset.v === opts.model));
+  $('#optLang').value = opts.lang; $('#optUi').value = lang;
+}
+$('#optModel').onclick = e => { const b = e.target.closest('button'); if (!b) return; opts.model = b.dataset.v; store.set('model', opts.model); paintOpts(); };
+$('#optLang').onchange = e => { opts.lang = e.target.value; store.set('lang', opts.lang); };
+$('#optUi').onchange = e => { lang = e.target.value; store.set('ui', lang); applyI18n(); };
+
+/* ---------- home actions ---------- */
+async function start(path){
+  $('#homeErr').classList.add('hidden');
+  const r = await api('/api/start', {path, model: opts.model === 'fast' ? 'small' : 'large-v3-turbo', language: opts.lang});
+  if (r.error){ $('#homeErr').textContent = errText(r); $('#homeErr').classList.remove('hidden'); return; }
+  handledJob = null; poll();
+}
+$('#pick').onclick = async () => {
+  $('#pick').disabled = true; $('#pick').textContent = t('picking');
+  try { const r = await api('/api/pick', {}); if (r.path) await start(r.path); }
+  finally { $('#pick').disabled = false; $('#pick').textContent = t('pick'); }
+};
+$('#go').onclick = () => { const p = $('#path').value.trim(); if (p) start(p); };
+$('#path').onkeydown = e => { if (e.key === 'Enter') $('#go').click(); };
+$('#saveGloss').onclick = async () => { await api('/api/glossary', {text:$('#gloss').value}); toast(t('glossSaved')); };
+api('/api/glossary').then(r => $('#gloss').value = r.text || '');
+
+function renderRecent(items){
+  renderRecent.items = items;
+  $('#recent').classList.toggle('hidden', !items.length);
+  const box = $('#recentList'); box.replaceChildren();
+  for (const it of items){
+    const row = document.createElement('div'); row.className = 'ritem';
+    const n = document.createElement('div'); n.className = 'n';
+    const b = document.createElement('b'); b.textContent = it.video;
+    const s = document.createElement('span'); s.textContent = new Date(it.when).toLocaleString(lang === 'it' ? 'it-IT' : 'en-US', {day:'numeric',month:'long',hour:'2-digit',minute:'2-digit'});
+    n.append(b, s);
+    const bt = document.createElement('button'); bt.className = 'btn'; bt.textContent = t('open');
+    bt.onclick = async () => { const r = await api('/api/open', {out:it.out}); r.error ? toast(errText(r)) : openReport(r.id); };
+    row.append(n, bt); box.append(row);
+  }
+}
+
+/* ---------- polling / busy ---------- */
+const ORDER = ['audio','transcribe','frames','report','done'];
+async function poll(){
+  let st;
+  try { st = await api('/api/state'); failures = 0; $('#offline').classList.add('hidden'); }
+  catch(e){ if (++failures >= 3) $('#offline').classList.remove('hidden'); return; }
+  renderRecent(st.history);
+  const j = st.job; JOB_RUNNING = j.running; lastJob = j;
+  if (j.running || (j.step === 'error' && handledJob !== 'err:'+j.video+j.error && view !== 'home')){
+    if (view !== 'busy') show('busy');
+    paintBusy(j);
+  } else if (j.step === 'done' && j.id && handledJob !== j.id && view === 'busy'){
+    handledJob = j.id; openReport(j.id);
+  } else if (view === 'busy' && j.step === 'error') paintBusy(j);
+}
+function paintBusy(j){
+  $('#busyFile').textContent = j.video || '';
+  const f = Math.round((j.frac || 0) * 100);
+  $('#bar').style.width = f + '%'; $('#pctText').textContent = f + '%';
+  const idx = ORDER.indexOf(j.step);
+  document.querySelectorAll('#steps li').forEach((li, i) => { li.className = i < idx ? 'ok' : (i === idx ? 'now' : ''); li.querySelector('.dot').textContent = i < idx ? '✓' : ''; });
+  const err = j.step === 'error';
+  $('#busyErr').classList.toggle('hidden', !err); $('#busyBack').classList.toggle('hidden', !err);
+  $('#busyHint').classList.toggle('hidden', err);
+  $('#busyTitle').textContent = err ? t('busyFail') : t('busyTitle');
+  if (err) $('#busyErr').textContent = t('failPrefix') + j.error;
+  if (j.duration && !err){
+    const k = j.gpu ? 0.08 : (j.model === 'small' ? 0.2 : 0.5);      // seconds of work per second of video
+    const min = j.duration * k / 60;
+    $('#eta').textContent = (min < 1 ? t('etaLess') : t('etaMin', Math.round(min))) + (j.gpu ? t('etaGpu') : '');
+  } else $('#eta').textContent = '';
+}
+$('#busyBack').onclick = () => { handledJob = 'err:' + $('#busyFile').textContent; show('home'); };
+setInterval(poll, 1500);
+
+/* ---------- editor ---------- */
+async function openReport(id){
+  D = await api('/api/report?id=' + id); rid = id;
+  if (D.error){ toast(errText(D)); return; }
+  const vid = $('#vid'); vid.pause();
+  if (D.has_video) vid.src = `/r/${id}/video`; else { vid.removeAttribute('src'); vid.load(); }
+  buildEditor(); show('edit'); count();
+}
+(function(){
+  const vid = $('#vid');
+  vid.addEventListener('timeupdate', () => {
+    if (stopAt !== null && vid.currentTime >= stopAt){ vid.pause(); stopAt = null; }
+    const tm = vid.currentTime;
+    rows.forEach(r => r.row.classList.toggle('now', !vid.paused && tm >= r.s.start && tm < r.s.end));
+  });
+  vid.addEventListener('pause', () => rows.forEach(r => r.row.classList.remove('now')));
+})();
+function playSeg(s){ const vid = $('#vid'); vid.currentTime = Math.max(0, s.start - 0.2); stopAt = s.end + 0.2; vid.play().catch(()=>{}); }
+
+function buildEditor(){
+  const list = $('#list'); list.replaceChildren(); rows = []; last = null;
+  D.segments.forEach((s, i) => {
+    const row = document.createElement('section'); row.className = 'card seg';
+    const meta = document.createElement('div'); meta.className = 'meta';
+    const pb = document.createElement('button'); pb.className = 'play'; pb.title = t('replay');
+    pb.innerHTML = '<svg width="12" height="14" viewBox="0 0 12 14"><path d="M1.5 1.2v11.6L11 7z" fill="currentColor"/></svg>';
+    pb.onclick = () => playSeg(s);
+    const tm = document.createElement('span'); tm.textContent = mmss(s.start) + '–' + mmss(s.end);
+    meta.append(pb, tm);
+    const th = document.createElement('img'); th.className = 'thumb'; th.alt = '';
+    const im = s.images || {}; th.src = `/r/${rid}/${im.zoom || im.full || ''}`;
+    th.onclick = () => lightbox(`/r/${rid}/${im.full || im.zoom}`, s.text);
+    const txt = document.createElement('div'); txt.className = 'txt'; txt.contentEditable = 'true'; txt.spellcheck = true;
+    if (D.edits && D.edits[i] !== undefined) txt.innerHTML = D.edits[i];
+    else if (s.words && s.words.length){
+      s.words.forEach((w, k) => {
+        const tk = w.w.trim(); if (!tk) return;
+        const lead = w.w.match(/^\s*/)[0];            // keep Whisper's own spacing: "c" + "'è" stays "c'è"
+        if (k && lead) txt.append(document.createTextNode(lead));
+        if (w.flag){
+          const e = document.createElement('span'); e.className = 'lo'; e.textContent = tk;
+          if (w.sug){ e.dataset.sug = w.sug; e.title = t('suggest', w.sug); }
+          else e.title = t('confidence', Math.round(w.p * 100));
+          txt.append(e);
+        } else txt.append(document.createTextNode(tk));
+      });
+    } else txt.textContent = s.text;
+    txt.addEventListener('input', () => {
+      let n = getSelection().anchorNode;
+      while (n && n !== txt){ if (n.classList && n.classList.contains('lo')){ n.classList.remove('lo'); break; } n = n.parentNode; }
+      changed();
+    });
+    txt.addEventListener('dblclick', e => { if (e.target.dataset && e.target.dataset.sug){ applySug(e.target); changed(); } });
+    row.append(meta, th, txt); list.append(row); rows.push({row, txt, s});
+  });
+}
+function applySug(el){
+  let sug = el.dataset.sug; const cur = el.textContent;
+  if (/^\p{Lu}/u.test(cur) && sug === sug.toLowerCase()) sug = sug[0].toUpperCase() + sug.slice(1);
+  el.textContent = cur.replace(/[\p{L}'’-]+/u, sug);
+  el.classList.remove('lo'); delete el.dataset.sug; el.title = '';
+}
+function count(){
+  const n = document.querySelectorAll('#list .lo').length, k = document.querySelectorAll('#list .lo[data-sug]').length;
+  const c = $('#count'); c.textContent = n ? (n === 1 ? t('countOne') : t('countMany', n)) : t('countNone');
+  c.className = 'pill ' + (n ? 'warn' : 'good') + (view === 'edit' ? '' : ' hidden');
+  const b = $('#applyAll'); b.classList.toggle('hidden', !k || view !== 'edit');
+  b.textContent = k === 1 ? t('applyOne') : t('applyMany', k);
+}
+$('#applyAll').onclick = () => { document.querySelectorAll('#list .lo[data-sug]').forEach(applySug); changed(); };
+
+function nextUncertain(){
+  const los = [...document.querySelectorAll('#list .lo')];
+  if (!los.length){ toast(t('nothing')); return; }
+  const el = los.find(e => last && last.isConnected && (last.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_FOLLOWING)) || los[0];
+  last = el; const r = rows.find(x => x.txt.contains(el));
+  el.scrollIntoView({block:'center', behavior:'smooth'});
+  r.txt.focus(); const rg = document.createRange(); rg.selectNodeContents(el);
+  const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+  playSeg(r.s);
+}
+$('#next').onclick = nextUncertain;
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') $('#lightbox').classList.add('hidden');
+  if (view === 'edit' && e.ctrlKey && e.key === 'Enter'){ e.preventDefault(); nextUncertain(); }
+});
+
+/* ---------- saving ---------- */
+function buildMd(){
+  let out = D.pre + '\n';
+  rows.forEach(({txt, s}) => {
+    out += '### [' + mmss(s.start) + '-' + mmss(s.end) + '] ' + txt.textContent.replace(/\s+/g,' ').trim() + '\n\n';
+    const unc = [...txt.querySelectorAll('.lo')].map(e => { const w = e.textContent.replace(/[^\p{L}\p{N}'’-]/gu,'').split(/['’]/).pop();
+      return w && (w + (e.dataset.sug ? ' (→ ' + e.dataset.sug + '?)' : '')); }).filter(Boolean);
+    if (unc.length) out += '**' + D.labels.uncertain + '**: ' + unc.join(', ') + '\n\n';
+    out += s.tail + '\n';
+  });
+  return out;
+}
+function changed(){
+  count(); $('#saved').textContent = t('saving');
+  clearTimeout(saveTimer); saveTimer = setTimeout(save, 700);
+}
+async function save(){
+  const edits = {}; rows.forEach((r, i) => edits[i] = r.txt.innerHTML);
+  try { const r = await api('/api/save', {id:rid, md:buildMd(), edits}); $('#saved').textContent = r.ok ? t('saved', r.at) : t('saveErr'); }
+  catch(e){ $('#saved').textContent = t('notSaved'); }
+}
+$('#copy').onclick = async () => {
+  const dir = D.report_path.replace(/[\\/]REPORT\.md$/, '');
+  const text = t('claudeText', D.report_path, dir);
+  try { await navigator.clipboard.writeText(text); toast(t('copied')); }
+  catch(e){ prompt(t('copyPrompt'), text); }
+};
+$('#reveal').onclick = () => api('/api/reveal', {id:rid});
+
+/* ---------- lightbox ---------- */
+function lightbox(src, cap){ $('#lbImg').src = src; $('#lbCap').textContent = cap; $('#lightbox').classList.remove('hidden'); }
+$('#lightbox').onclick = () => $('#lightbox').classList.add('hidden');
+
+/* ---------- start ---------- */
+paintOpts(); applyI18n(); poll();
+const deep = location.hash.match(/^#open=([0-9a-f]{10})$/);   // deep link to a report (used for the README screenshots)
+if (deep) openReport(deep[1]);
+</script>
+</body>
+</html>

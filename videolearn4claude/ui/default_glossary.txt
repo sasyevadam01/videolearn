@@ -1,0 +1,7 @@
+# Glossary: words Whisper often gets wrong (machine names, product names, acronyms, jargon).
+# Write a short sentence or a list of terms. They help the transcription spell them right,
+# and the editor flags words that are *almost* one of your terms (e.g. "pedale" -> "pedane").
+# Lines starting with # are ignored.
+#
+# Example:
+# Weekly review of the packaging line: palletizer, shrink wrapper, conveyor, forklift, SKU, OEE.

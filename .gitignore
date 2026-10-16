@@ -1,0 +1,14 @@
+__pycache__/
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+cuda_libs/
+*_report/
+*.log
+.vscode/
+.idea/
+# keep the small neutral demo video, ignore any other video
+*.mp4
+!docs/demo/demo.mp4
