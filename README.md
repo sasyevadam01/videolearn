@@ -47,6 +47,8 @@ the report Claude receives:
 - **A Claude connector (MCP server)** so Claude Desktop / Claude Code can call it by itself: *"Watch this video and explain
   the process."* See [Use it from Claude](#use-it-from-claude-connector).
 - **Fast.** A 3-minute video takes about **25 seconds** on an NVIDIA GPU (details below).
+- **Two engines, chosen automatically.** NVIDIA card: faster-whisper + CUDA. AMD or Intel card: whisper.cpp + Vulkan
+  (needs the `whisper-cli` build, see [Engines](#engines)). Otherwise, or if the second engine fails: the processor.
 
 ## Install (Windows 10 / 11)
 
@@ -65,11 +67,15 @@ The installer is per-user (no administrator rights) and takes a few minutes. It:
 2. installs the app and the connector into `%LOCALAPPDATA%\VideoLearn`;
 3. downloads `ffmpeg` (only if you don't have it);
 4. **if an NVIDIA graphics card is present**, installs the CUDA libraries (~2 GB) so the GPU is used;
+   **if an AMD or Intel card is present** and you pass `-WhisperCppDir <folder>` (a Vulkan build of `whisper-cli.exe`, see
+   [Engines](#engines)), copies it into `%LOCALAPPDATA%\VideoLearn\whispercpp` and downloads the `ggml` model for it
+   (1.6 GB, or 0.6 GB with `-VulkanModel q5`). PCs that use another engine never download it;
 5. downloads the speech model once (~1.6 GB, stored in the Hugging Face cache);
 6. creates **Desktop and Start-menu shortcuts**.
 
-Disk space (measured): about 4.5 GB with the NVIDIA libraries, about 2.5 GB without (the speech model alone is ~1.5 GB). Re-run the installer at any time to update.
-Options: `-NoGpu`, `-NoMcp`, `-SkipModel`, `-NoShortcuts`, `-InstallDir <path>` (run `install.ps1` directly to pass them).
+Disk space (measured): about 4.5 GB with the NVIDIA libraries, about 2.5 GB without (the speech model alone is ~1.5 GB).
+The Vulkan engine adds about **1.7 GB** (1.6 GB model + 50 MB program) or about 0.7 GB with the quantized model. Re-run the installer at any time to update.
+Options: `-NoGpu`, `-NoVulkan`, `-WhisperCppDir <folder>`, `-VulkanModel full|q5`, `-NoMcp`, `-SkipModel`, `-NoShortcuts`, `-InstallDir <path>` (run `install.ps1` directly to pass them).
 To remove everything: run `uninstall.ps1` (add `-RemoveUserData` / `-RemoveModels` to also delete your glossary and the downloaded models).
 
 > The installer is a plain, readable PowerShell script: [`install.ps1`](install.ps1). Read it before you run it, as you
@@ -95,6 +101,7 @@ videolearn video.mp4 -l en -m small --glossary glossary.txt --fps 4
 ```
 
 `-m small` is ~3x faster but less accurate; `--fps 4` follows the mouse more finely; `--uncertain 0.6` highlights more words.
+`--engine auto|cuda|vulkan|cpu` forces an engine (default `auto`; a forced engine that cannot run is an error, `auto` falls back to the processor).
 If you run the same video again, the saved transcription is reused (a few seconds instead of a full run).
 
 ## Use it from Claude (connector)
@@ -161,7 +168,62 @@ mouse tracking, report). **Your machine will differ.**
 | `large-v3-turbo`, **NVIDIA GPU (RTX 3070)** | **~25 s** |
 
 On a sample, `large-v3-turbo` matched `large-v3` at 98% of the words (one language, one recording: don't read more into it).
-Without an NVIDIA GPU everything still works on the CPU, just slower. AMD / Intel / Apple GPUs are not used.
+Without an NVIDIA GPU everything still works on the CPU, just slower. Apple GPUs are not used.
+
+### AMD / Intel graphics (Vulkan engine)
+
+Measured on an AMD Ryzen 7 255 + Radeon 780M (integrated, shared memory), transcription only, `large-v3-turbo`, mean of
+the runs after the first. Word times are compared with faster-whisper (b14, demo) or, for the audio with added silences,
+with the known truth. **One PC, three recordings: your machine will differ.**
+
+| Audio | faster-whisper, CPU | whisper.cpp, Vulkan | Mean word-time gap | Words within 0.5 s | Text differences |
+|---|---|---|---|---|---|
+| Demo, 38 s (synthetic voice, English) | 12.8 s | **6.2 s** | 0.53 s | 50% | 2 of 80 words |
+| Recording, 2 min 43 s (Italian) | 36.2 s | **21.9 s** | 0.27 s | 85% | 2 extra words of 439 |
+| Same + four silences of 20-30 s | 36.4 s | **27.3 s** | 0.32 s (max 2.5 s) | 83% | 0, and no word inside a silence |
+
+So the Vulkan engine is about **1.3-2x faster** than the processor here, not 5x like an NVIDIA card, and its word times are
+less exact (the pointer can be matched to a word about a third of a second off, up to ~1.5 s in the worst words; the demo is worse).
+The text is nearly the same; both engines make the same jargon mistakes, which is what the glossary is for.
+
+## Engines
+
+| Your PC | Engine | Speech model |
+|---|---|---|
+| NVIDIA card + CUDA libraries | faster-whisper + CUDA | `large-v3-turbo` (CTranslate2) |
+| AMD / Intel card + `whisper-cli` (Vulkan) installed | whisper.cpp + Vulkan | `ggml-large-v3-turbo` |
+| anything else, or the second engine fails | faster-whisper on the CPU | `large-v3-turbo` (CTranslate2) |
+
+`--engine auto` (CLI), `engine="auto"` (connector's `watch_video`, optional) or the app picks for you. Before using Vulkan the app runs a
+2-second check and confirms that `whisper-cli` really uses the graphics card (a software renderer does not count); the result is
+remembered in `%USERPROFILE%\.videolearn\vulkan_probe.json`. If the check fails, or whisper.cpp fails or takes too long, the app
+continues on the CPU and writes the reason in the log. A forced `--engine vulkan` reports the error instead.
+
+How the Vulkan engine keeps the same report: `REPORT.md`, `report.json` and the connector's tools are unchanged.
+- **Doubtful words** use the same `--uncertain` threshold: a word's confidence is the mean probability of its tokens, which is
+  how faster-whisper defines it (`np.mean` of the token probabilities). The two models are not calibrated identically, so counts can differ
+  a little (8 vs 8 words on the 2 min 43 s recording, 1 vs 0 on the demo).
+- **Word times.** whisper.cpp dates the first words after a long silence far too early, and its built-in `--vad` shifts times cumulatively.
+  So VideoLearn finds the speech itself (the same Silero VAD that faster-whisper uses), splits the audio at silences of 5 s or more, has
+  `whisper-cli` transcribe each piece as its own file (one process, the model is loaded once) and adds the start of the piece to every time.
+  On a recording with 100 s of silence added, one single pass put 32 words inside the silences (up to 13 s off); with the split, none, and the text came out identical.
+
+Where the files go: `<install folder>\whispercpp\whisper-cli.exe` (+ its DLLs) and `models\ggml-large-v3-turbo.bin`
+(or `-q5_0`, 574 MB: a little less accurate, 0.5 GB of memory instead of 1.4 GB). `VIDEOLEARN_WHISPERCPP_DIR` overrides the folder.
+
+**There is no ready-made Windows Vulkan build of `whisper-cli`** (the official releases only have CPU, BLAS and CUDA builds), so for now you build
+it once and pass the folder to the installer. With MinGW (no administrator rights) and the Vulkan headers + `glslc`:
+
+```powershell
+git clone --depth 1 --branch v1.9.5 https://github.com/ggml-org/whisper.cpp
+cd whisper.cpp
+cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGGML_VULKAN=1 -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF
+cmake --build build --target whisper-cli
+# put build\bin\whisper-cli.exe plus libgcc_s_seh-1, libstdc++-6, libwinpthread-1, libgomp-1 and libdl DLLs of MinGW in one folder
+.\install.ps1 -WhisperCppDir C:\path\to\that\folder
+```
+
+`-DGGML_NATIVE=OFF` keeps the build runnable on other processors. The Vulkan driver itself comes with the graphics-card driver.
 
 ## Limits (please read)
 
@@ -179,7 +241,7 @@ Without an NVIDIA GPU everything still works on the CPU, just slower. AMD / Inte
 ## Privacy and security
 
 - Transcription, mouse tracking and the app run **locally**. Downloads happen only at install time (uv, Python, packages,
-  ffmpeg, NVIDIA libraries, the model from Hugging Face). Once the model is cached, processing makes no network request.
+  ffmpeg, NVIDIA libraries, the model from Hugging Face, and on AMD / Intel PCs the `ggml` model from Hugging Face). Once the model is cached, processing makes no network request.
 - The app is a small web server bound to `127.0.0.1` only; it rejects requests with a foreign `Host` header and requires a custom
   header for every action. It exits by itself two minutes after you close its window.
 - The connector reads the video path Claude asks for and writes the report next to it. Don't give it to a client you don't trust.
@@ -195,7 +257,7 @@ python -m unittest discover -s tests         # unit tests (no Whisper or ffmpeg 
 python tools/make_demo.py                    # rebuilds docs/demo/demo.mp4 (Windows voice)
 ```
 
-Layout: `videolearn/core.py` (pipeline), `app.py` + `ui/index.html` (the app), `mcp_server.py` (connector),
+Layout: `videolearn/core.py` (pipeline), `engines.py` (whisper.cpp + Vulkan engine), `app.py` + `ui/index.html` (the app), `mcp_server.py` (connector),
 `cli.py`, `prefetch.py`, `install.ps1` / `uninstall.ps1`, `tools/` (icon and demo generators), `tests/`.
 Issues and pull requests are welcome.
 
