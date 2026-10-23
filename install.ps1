@@ -7,12 +7,18 @@
   What it does: installs the fast Python manager "uv" (only if missing), a private Python 3.12 + the app
   in %LOCALAPPDATA%\VideoLearn, ffmpeg (only if missing), the NVIDIA CUDA libraries (only if an
   NVIDIA GPU is present), downloads the speech model once, and creates Desktop + Start menu shortcuts.
-  Nothing outside that folder, your shortcuts and ~/.cache/huggingface (the model) is touched.
+  On a PC with an AMD or Intel graphics card it can also set up the faster whisper.cpp + Vulkan engine
+  (see -WhisperCppDir). Nothing outside that folder, your shortcuts and ~/.cache/huggingface (the model) is touched.
 
   Options (when running the file directly):
     -InstallDir <path>   where to install (default %LOCALAPPDATA%\VideoLearn)
     -Source <folder|zip> install from a local folder or a zip URL instead of GitHub
     -NoGpu               do not install the NVIDIA CUDA libraries
+    -NoVulkan            do not set up the Vulkan engine (AMD / Intel graphics cards)
+    -WhisperCppDir <dir> folder with a Vulkan build of whisper-cli.exe (and its DLLs, optionally models\);
+                         it is copied to <install folder>\whispercpp. Only used on AMD / Intel PCs.
+    -VulkanModel full|q5 ggml model for the Vulkan engine: full = large-v3-turbo (1.6 GB, default) or
+                         q5 = quantized (0.6 GB, a little less accurate)
     -NoMcp               do not install the Claude connector (MCP server)
     -SkipModel           do not pre-download the speech model
     -NoShortcuts         do not create Desktop / Start menu shortcuts
@@ -22,6 +28,9 @@ param(
     [string]$InstallDir = (Join-Path $env:LOCALAPPDATA 'VideoLearn'),
     [string]$Source = '',
     [switch]$NoGpu,
+    [switch]$NoVulkan,
+    [string]$WhisperCppDir = '',
+    [ValidateSet('full', 'q5')][string]$VulkanModel = 'full',
     [switch]$NoMcp,
     [switch]$SkipModel,
     [switch]$NoShortcuts
@@ -58,7 +67,7 @@ try {
     Write-Host "  Install folder: $InstallDir" -ForegroundColor DarkGray
     if ($InstallDir.Length -gt 100) { Write-Warning 'That install path is very long; Windows tools can misbehave above 260 characters. A shorter -InstallDir is safer.' }
     $free = (Get-PSDrive -Name ((Split-Path $InstallDir -Qualifier).TrimEnd(':'))).Free
-    if ($free -lt 5GB) { Write-Warning ('Only {0:N1} GB free on that drive; the install needs about 5 GB (model + libraries).' -f ($free / 1GB)) }
+    if ($free -lt 5GB) { Write-Warning ('Only {0:N1} GB free on that drive; the install needs about 5 GB (model + libraries), and 1.6 GB more for the Vulkan engine on AMD / Intel PCs.' -f ($free / 1GB)) }
 
     # 1 ---------------------------------------------------------------- uv
     Step 1 'Python manager (uv)'
@@ -141,7 +150,38 @@ try {
     Step 5 'Graphics card acceleration'
     $nv = (Get-Command nvidia-smi -ErrorAction SilentlyContinue) -or (Test-Path (Join-Path $env:SystemRoot 'System32\nvidia-smi.exe'))
     if ($NoGpu) { Info 'skipped (-NoGpu)' }
-    elseif (-not $nv) { Info 'no NVIDIA graphics card found: the processor will be used (works fine, just slower)' }
+    elseif (-not $nv) {
+        $gpuNames = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue | ForEach-Object { $_.Name })
+        $amdIntel = @($gpuNames | Where-Object { $_ -match 'AMD|Radeon|Intel' -and $_ -notmatch 'Remote Display|Basic' })
+        if ($NoVulkan -or -not $amdIntel) {
+            Info 'no NVIDIA graphics card found: the processor will be used (works fine, just slower)'
+        }
+        elseif (-not $WhisperCppDir -or -not (Test-Path (Join-Path $WhisperCppDir 'whisper-cli.exe'))) {
+            Info "graphics card: $($amdIntel[0]). The faster Vulkan engine needs a whisper-cli.exe build (-WhisperCppDir), which was not given:"
+            Info 'the processor will be used (works fine, just slower)'
+        }
+        else {
+            Info "graphics card: $($amdIntel[0]): setting up the Vulkan engine (whisper.cpp)"
+            $wc = Join-Path $InstallDir 'whispercpp'
+            New-Item -ItemType Directory -Force -Path (Join-Path $wc 'models') | Out-Null
+            Get-ChildItem -LiteralPath $WhisperCppDir -File | Copy-Item -Destination $wc -Force
+            $gg = if ($VulkanModel -eq 'q5') { 'ggml-large-v3-turbo-q5_0.bin' } else { 'ggml-large-v3-turbo.bin' }
+            $ggPath = Join-Path $wc "models\$gg"
+            $given = Join-Path $WhisperCppDir "models\$gg"
+            if (Test-Path $given) { Copy-Item $given $ggPath -Force }
+            if (-not (Test-Path $ggPath)) {
+                if ($SkipModel) { Info "skipped the Vulkan model (-SkipModel): copy $gg to $wc\models to use the Vulkan engine" }
+                else {
+                    $mb = if ($VulkanModel -eq 'q5') { 574 } else { 1625 }
+                    Info "downloading the Vulkan speech model $gg (about $mb MB, one time)"
+                    try { Download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$gg" "$ggPath.part"; Move-Item "$ggPath.part" $ggPath -Force }
+                    catch { Remove-Item "$ggPath.part" -Force -ErrorAction SilentlyContinue
+                            Write-Warning 'The Vulkan model could not be downloaded; the processor will be used.' }
+                }
+            }
+            # the app checks that Vulkan really runs on the GPU the first time; if not, it uses the processor
+        }
+    }
     else {
         Info 'NVIDIA card found: installing the CUDA libraries (about 2 GB, one time)'
         Native { & $uv pip install --python $py nvidia-cublas-cu12 nvidia-cudnn-cu12 }

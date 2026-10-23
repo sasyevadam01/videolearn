@@ -10,7 +10,8 @@ the first words after a long silence are dated back to the end of the previous s
 at long silences, whisper-cli transcribes each piece as its own file (one process, the model is loaded
 once) and the start of the piece is added to every time of that piece.
 
-Files live in ~/.videolearn/whispercpp (or $VIDEOLEARN_WHISPERCPP_DIR):
+Files live in <install folder>/whispercpp next to the app's venv, or ~/.videolearn/whispercpp
+(or $VIDEOLEARN_WHISPERCPP_DIR, which wins):
     whisper-cli.exe (+ its DLLs)
     models/ggml-large-v3-turbo.bin  (or ggml-large-v3-turbo-q5_0.bin, ggml-small.bin, ...)
 """
@@ -21,6 +22,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 import wave
@@ -39,8 +41,12 @@ class EngineError(RuntimeError):
 
 
 def whispercpp_dir() -> Path:
+    """Folder holding whisper-cli.exe: the first candidate that has it (else the installer's default one)."""
     env = os.environ.get("VIDEOLEARN_WHISPERCPP_DIR")
-    return Path(env) if env else Path.home() / ".videolearn" / "whispercpp"
+    if env:
+        return Path(env)
+    candidates = [Path(sys.prefix).parent / "whispercpp", Path.home() / ".videolearn" / "whispercpp"]
+    return next((c for c in candidates if (c / "whisper-cli.exe").is_file()), candidates[0])
 
 
 # ---------- what is installed ----------
