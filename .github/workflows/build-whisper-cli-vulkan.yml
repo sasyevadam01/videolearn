@@ -60,13 +60,13 @@ jobs:
           Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
           Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
 
-      # One self-contained exe: static ggml, static C runtime, no OpenMP (nothing to install on the user's PC).
+      # One self-contained exe: static ggml, static C runtime (CMP0091=NEW makes the runtime setting count), no OpenMP (nothing to install on the user's PC).
       # GGML_NATIVE=OFF so it runs on any x64 processor with AVX2, not only on the one that built it.
       - name: Configure
         run: |
           cmake -S whisper.cpp -B build -A x64 `
             -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF `
-            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_POLICY_DEFAULT_CMP0091=NEW `
             -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
 
       - name: Build
@@ -113,7 +113,7 @@ jobs:
           whisper-cli.exe - whisper.cpp $env:WHISPER_TAG (commit $commit) built with Vulkan
           Built by GitHub Actions ($env:GITHUB_REPOSITORY, run $env:GITHUB_RUN_ID) on $env:ImageOS / $env:ImageVersion
           Vulkan SDK $env:VULKAN_VERSION. cmake -A x64 -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF
-            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded -DCMAKE_POLICY_DEFAULT_CMP0091=NEW
           Needs a Vulkan driver (comes with the graphics card driver) and a processor with AVX2.
           "@ | Set-Content dist/pkg/BUILD-INFO.txt -Encoding utf8
           Compress-Archive -Path dist/pkg/* -DestinationPath "dist/$asset" -Force
