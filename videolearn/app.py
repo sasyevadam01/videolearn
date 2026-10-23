@@ -24,7 +24,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
-from .core import HOME, ensure_ffmpeg, gpu_possible, process, read_glossary
+from .core import HOME, engine_hint, ensure_ffmpeg, process, read_glossary
 
 ROOT = Path(__file__).resolve().parent
 UI = ROOT / "ui" / "index.html"
@@ -230,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
             model = "small" if b.get("model") == "small" else "large-v3-turbo"
             JOB.update(running=True, step="audio", frac=0.0, error=None, out=None, id=None,
                        video=video.name, duration=video_duration(video), model=model,
-                       gpu=gpu_possible())
+                       gpu=engine_hint() != "cpu")
             threading.Thread(target=run_job, args=(video, model, str(b.get("language", "auto"))), daemon=True).start()
             return self._json({"ok": True})
         if p == "/api/open":

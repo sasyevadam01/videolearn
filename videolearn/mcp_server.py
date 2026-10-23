@@ -66,7 +66,8 @@ def _report_dir(report_dir: str) -> Path:
 
 
 @mcp.tool()
-async def watch_video(video_path: str, ctx: Context, language: str = "auto", quality: str = "precise") -> str:
+async def watch_video(video_path: str, ctx: Context, language: str = "auto", quality: str = "precise",
+                      engine: str = "auto") -> str:
     """Watch a narrated screen recording: transcribe the voice-over and track the mouse pointer.
 
     Claude cannot take video or audio as input; this tool recovers both. Everything runs on the
@@ -77,7 +78,11 @@ async def watch_video(video_path: str, ctx: Context, language: str = "auto", qua
         video_path: absolute path of the video file on this computer.
         language: speech language code ("en", "it", "es", ...) or "auto" to detect it.
         quality: "precise" (default) or "fast" (about 3x quicker, makes more mistakes).
+        engine: "auto" (default: NVIDIA GPU, else AMD/Intel GPU through Vulkan if installed, else the CPU),
+            or force "cuda", "vulkan" or "cpu".
     """
+    if engine not in ("auto", "cuda", "vulkan", "cpu"):
+        raise ValueError('engine must be "auto", "cuda", "vulkan" or "cpu"')
     loop = asyncio.get_running_loop()
 
     def progress(frac: float, step: str) -> None:
@@ -86,7 +91,7 @@ async def watch_video(video_path: str, ctx: Context, language: str = "auto", qua
     report = await asyncio.to_thread(
         process, video_path, None, model="small" if quality == "fast" else "large-v3-turbo",
         language=None if language == "auto" else language, prompt=_glossary_prompt(),
-        progress=progress, log=lambda m: None)
+        progress=progress, log=lambda m: None, engine=engine)
     return _compact(report.parent)
 
 

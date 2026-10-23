@@ -27,6 +27,8 @@ import numpy as np
 from PIL import Image, ImageDraw
 from scipy import ndimage
 
+from . import engines
+
 LABELS = {
     "en": {
         "title": "Narrated screencast report",
@@ -244,14 +246,47 @@ def _run_whisper(wav: Path, model: str, language: str | None, device: str, promp
     return words, info.language
 
 
-def transcribe(wav: Path, model: str, language: str | None, device: str = "auto",
-               prompt: str | None = None, progress=None) -> tuple[list[dict], str, str]:
-    """Returns (raw timed words, detected language, device used). Slow part: cached by the caller.
+ENGINES = ("auto", "cuda", "vulkan", "cpu")
 
-    device="auto" uses the NVIDIA GPU when its libraries are available and quietly
-    falls back to the CPU otherwise.
+
+def engine_hint() -> str:
+    """Engine `auto` would try first, without starting anything: "cuda", "vulkan" or "cpu" (for the app's time estimate)."""
+    if gpu_possible():
+        return "cuda"
+    return "vulkan" if engines.vulkan_candidate() else "cpu"
+
+
+def _run_vulkan(wav: Path, model: str, language: str | None, prompt: str | None, progress, log):
+    engines.probe_vulkan(model)                 # short run: Vulkan must really use the GPU, or EngineError
+    words, lang = engines.transcribe_whispercpp(wav, model, language, prompt, progress, log, threads=_threads())
+    return words, lang
+
+
+def transcribe(wav: Path, model: str, language: str | None, device: str = "auto",
+               prompt: str | None = None, progress=None, engine: str = "auto",
+               log=None) -> tuple[list[dict], str, str]:
+    """Returns (raw timed words, detected language, engine used). Slow part: cached by the caller.
+
+    engine="auto": the NVIDIA GPU (faster-whisper + CUDA) when its libraries are available; else, on an
+    AMD/Intel GPU with whisper.cpp installed, Vulkan; else the CPU. Whenever an automatic choice fails
+    it quietly falls back to the CPU and says why through `log`. "cuda", "vulkan" and "cpu" force one engine
+    (a forced engine that cannot run raises instead of falling back). `device` is the old name of this option.
     """
-    if device == "auto" and gpu_possible():
+    note = log or (lambda m: None)
+    req = engine if engine != "auto" else device
+    if req not in ENGINES:
+        raise ValueError(f"unknown engine {req!r} (choose one of {', '.join(ENGINES)})")
+    if req == "vulkan":
+        try:
+            return (*_run_vulkan(wav, model, language, prompt, progress, log), "vulkan")
+        except engines.EngineError as e:
+            raise RuntimeError(f"Vulkan engine unavailable: {e}") from e
+    if req == "auto" and not gpu_possible() and engines.vulkan_candidate(model):
+        try:
+            return (*_run_vulkan(wav, model, language, prompt, progress, log), "vulkan")
+        except engines.EngineError as e:
+            note(f"    Vulkan engine skipped, using the processor: {e}")
+    if req == "auto" and gpu_possible():
         for d in _cuda_dirs():
             os.add_dll_directory(str(d))
             os.environ["PATH"] = str(d) + os.pathsep + os.environ["PATH"]
@@ -259,7 +294,7 @@ def transcribe(wav: Path, model: str, language: str | None, device: str = "auto"
             return (*_run_whisper(wav, model, language, "cuda", prompt, progress), "cuda")
         except Exception:                # missing/incompatible CUDA libs: use the CPU
             pass
-    elif device == "cuda":
+    elif req == "cuda":
         return (*_run_whisper(wav, model, language, "cuda", prompt, progress), "cuda")
     return (*_run_whisper(wav, model, language, "cpu", prompt, progress), "cpu")
 
@@ -361,7 +396,7 @@ def _clean(word: str) -> str:
 def process(video: str | Path, out_dir: str | Path | None = None, *, model: str = "small",
             language: str | None = None, device: str = "auto", fps: float = 2.0,
             prompt: str | None = None, uncertain: float = 0.5,
-            keep_frames: bool = False, log=print, progress=None) -> Path:
+            keep_frames: bool = False, log=print, progress=None, engine: str = "auto") -> Path:
     """Run the whole pipeline and return the path of REPORT.md.
 
     `progress(fraction, step)` is optional; step is one of audio, transcribe, frames, report, done.
@@ -384,7 +419,9 @@ def process(video: str | Path, out_dir: str | Path | None = None, *, model: str 
         tmp = Path(tmp)
         if _has_audio(video):
             st = video.stat()
-            key = hashlib.sha1(f"{st.st_size}|{st.st_mtime_ns}|{model}|{language}|{prompt}".encode()).hexdigest()
+            forced = engine if engine != "auto" else device      # an explicit engine gets its own cached transcript
+            key = hashlib.sha1((f"{st.st_size}|{st.st_mtime_ns}|{model}|{language}|{prompt}"
+                                + ("" if forced == "auto" else f"|{forced}")).encode()).hexdigest()
             cache = out / "transcript_raw.json"
             cached = json.loads(cache.read_text(encoding="utf-8")) if cache.exists() else {}
             if cached.get("key") == key:
@@ -394,10 +431,11 @@ def process(video: str | Path, out_dir: str | Path | None = None, *, model: str 
                 log("1/4 extracting audio")
                 prog(0.0, "audio")
                 extract_audio(video, tmp / "audio.wav")
-                log(f"2/4 transcribing (whisper '{model}', device: {device})")
+                log(f"2/4 transcribing (whisper '{model}', engine: {engine if engine != 'auto' else device})")
                 prog(0.05, "transcribe")
                 words, lang, used = transcribe(tmp / "audio.wav", model, language, device, prompt,
-                                               progress=lambda fr: prog(0.05 + 0.8 * fr, "transcribe"))
+                                               progress=lambda fr: prog(0.05 + 0.8 * fr, "transcribe"),
+                                               engine=engine, log=log)
                 log(f"    done on {used}")
                 cache.write_text(json.dumps({"key": key, "language": lang, "words": words},
                                             ensure_ascii=False), encoding="utf-8")
