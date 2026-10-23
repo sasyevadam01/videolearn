@@ -8,6 +8,11 @@
 name: Build whisper-cli (Vulkan, Windows x64)
 
 on:
+  # TEMPORARY dry-run trigger: workflow_dispatch only works for a workflow file that is on the default branch.
+  # It runs when this file changes on the doppio-motore branch, never publishes (inputs.publish is empty), and is removed afterwards.
+  push:
+    branches: [doppio-motore]
+    paths: ['.github/workflows/build-whisper-cli-vulkan.yml']
   workflow_dispatch:
     inputs:
       whisper_tag:
@@ -30,7 +35,7 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 60
     env:
-      WHISPER_TAG: ${{ inputs.whisper_tag }}
+      WHISPER_TAG: ${{ inputs.whisper_tag || 'v1.9.5' }}
     outputs:
       asset: ${{ steps.pack.outputs.asset }}
       sha256: ${{ steps.pack.outputs.sha256 }}
@@ -43,7 +48,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
         with:
           repository: ggml-org/whisper.cpp
-          ref: ${{ inputs.whisper_tag }}
+          ref: ${{ inputs.whisper_tag || 'v1.9.5' }}
           path: whisper.cpp
           persist-credentials: false
 
