@@ -83,8 +83,11 @@ jobs:
             Write-Host "::notice title=exe size::$((Get-Item $exe).Length) bytes"
             # only Windows system DLLs may be needed (no MSVC runtime, no OpenMP, no ggml DLLs)
             $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-            $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\x64' } | Select-Object -First 1
-            if (-not $dumpbin) { throw "dumpbin.exe not found under '$vsPath'" }
+            $cands = @(Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe -ErrorAction SilentlyContinue)
+            Write-Host "::notice title=dumpbin candidates::$(($cands | Select-Object -First 6 | ForEach-Object FullName) -join ' ; ')"
+            # the x64 host build is preferred, any dumpbin can read a 64-bit executable
+            $dumpbin = $cands | Sort-Object { $_.FullName -notmatch 'Hostx64\x64' } | Select-Object -First 1
+            if (-not $dumpbin) { throw "dumpbin.exe not found under '$vsPath\VC\Tools\MSVC'; there: $((Get-ChildItem "$vsPath\VC\Tools\MSVC" -Depth 2 -ErrorAction SilentlyContinue | Select-Object -First 8 | ForEach-Object FullName) -join ' ; ')" }
             $deps = @(& $dumpbin.FullName /dependents $exe | Select-String -Pattern '^\s+\S+\.dll\s*$' | ForEach-Object { $_.Line.Trim() })
             Write-Host "::notice title=DLLs needed::$($deps -join ', ')"
             "DLLs needed: $($deps -join ', ')" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
