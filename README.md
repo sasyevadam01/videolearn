@@ -211,8 +211,13 @@ How the Vulkan engine keeps the same report: `REPORT.md`, `report.json` and the 
 Where the files go: `<install folder>\whispercpp\whisper-cli.exe` (+ its DLLs) and `models\ggml-large-v3-turbo.bin`
 (or `-q5_0`, 574 MB: a little less accurate, 0.5 GB of memory instead of 1.4 GB). `VIDEOLEARN_WHISPERCPP_DIR` overrides the folder.
 
-**There is no ready-made Windows Vulkan build of `whisper-cli`** (the official releases only have CPU, BLAS and CUDA builds), so for now you build
-it once and pass the folder to the installer. With MinGW (no administrator rights) and the Vulkan headers + `glslc`:
+**There is no ready-made Windows Vulkan build of `whisper-cli`** upstream (the official releases only have CPU, BLAS and CUDA builds).
+This repository builds one: run the workflow [`build-whisper-cli-vulkan.yml`](.github/workflows/build-whisper-cli-vulkan.yml) by hand
+(Actions > *Build whisper-cli (Vulkan, Windows x64)* > Run workflow, with *publish* on). It compiles whisper.cpp with MSVC and the Vulkan SDK
+into one self-contained `whisper-cli.exe`, checks that it needs no extra DLLs, and publishes it as a Release asset with its SHA256. Put that SHA256 in
+`$WhisperCliSha256` in `install.ps1`: from then on the installer downloads the file on AMD / Intel PCs and refuses it if the checksum differs
+(the ggml models are checked against their Hugging Face SHA256 too). Until then, build it yourself once and pass the folder to the installer.
+With MinGW (no administrator rights) and the Vulkan headers + `glslc`:
 
 ```powershell
 git clone --depth 1 --branch v1.9.5 https://github.com/ggml-org/whisper.cpp

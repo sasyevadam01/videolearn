@@ -1,0 +1,143 @@
+# Builds whisper.cpp's `whisper-cli.exe` for Windows x64 with the Vulkan backend (what VideoLearn uses on
+# AMD / Intel graphics cards) and, when asked, publishes it as a GitHub Release asset with its SHA256.
+#
+# Runs ONLY by hand: Actions > "Build whisper-cli (Vulkan, Windows x64)" > Run workflow. Nothing runs on push.
+# "publish" off  = build, check and keep the zip as a workflow artifact (a dry run).
+# "publish" on   = also create the Release `whispercpp-vulkan-<tag>` with the zip and its .sha256 file.
+# After a publish, put the SHA256 printed in the run summary into install.ps1 ($WhisperCliSha256).
+name: Build whisper-cli (Vulkan, Windows x64)
+
+on:
+  workflow_dispatch:
+    inputs:
+      whisper_tag:
+        description: 'whisper.cpp tag to build (vX.Y.Z)'
+        required: true
+        default: 'v1.9.5'
+      publish:
+        description: 'Publish a GitHub Release with the zip (off = keep it only as a workflow artifact)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  VULKAN_VERSION: 1.4.363.0       # LunarG Vulkan SDK used to build (headers, glslc, import library)
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    env:
+      WHISPER_TAG: ${{ inputs.whisper_tag }}
+    outputs:
+      asset: ${{ steps.pack.outputs.asset }}
+      sha256: ${{ steps.pack.outputs.sha256 }}
+    steps:
+      - name: Check the tag
+        run: |
+          if ($env:WHISPER_TAG -notmatch '^v\d+\.\d+\.\d+$') { throw "whisper_tag must look like v1.9.5, got '$env:WHISPER_TAG'" }
+
+      - name: Get whisper.cpp
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1   # v7.0.1
+        with:
+          repository: ggml-org/whisper.cpp
+          ref: ${{ inputs.whisper_tag }}
+          path: whisper.cpp
+          persist-credentials: false
+
+      - name: Install the Vulkan SDK
+        run: |
+          curl.exe -fsSL -o "$env:RUNNER_TEMP/VulkanSDK-Installer.exe" "https://sdk.lunarg.com/sdk/download/$env:VULKAN_VERSION/windows/vulkansdk-windows-X64-$env:VULKAN_VERSION.exe"
+          & "$env:RUNNER_TEMP\VulkanSDK-Installer.exe" --accept-licenses --default-answer --confirm-command install
+          if ($LASTEXITCODE -ne 0) { throw "Vulkan SDK installer failed ($LASTEXITCODE)" }
+          Add-Content $env:GITHUB_ENV "VULKAN_SDK=C:\VulkanSDK\$env:VULKAN_VERSION"
+          Add-Content $env:GITHUB_PATH "C:\VulkanSDK\$env:VULKAN_VERSION\bin"
+
+      # One self-contained exe: static ggml, static C runtime, no OpenMP (nothing to install on the user's PC).
+      # GGML_NATIVE=OFF so it runs on any x64 processor with AVX2, not only on the one that built it.
+      - name: Configure
+        run: |
+          cmake -S whisper.cpp -B build -A x64 `
+            -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF `
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded `
+            -DWHISPER_BUILD_EXAMPLES=ON -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF
+
+      - name: Build
+        run: cmake --build build --config Release --target whisper-cli -j 4
+
+      - name: Check the executable
+        run: |
+          $exe = "build\bin\Release\whisper-cli.exe"
+          if (-not (Test-Path $exe)) { throw "$exe was not built" }
+          # only Windows system DLLs may be needed (no MSVC runtime, no OpenMP, no ggml DLLs)
+          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
+          $deps = & $dumpbin.FullName /dependents $exe | Select-String -Pattern '^\s+\S+\.dll\s*$' | ForEach-Object { $_.Line.Trim() }
+          "DLLs needed: $($deps -join ', ')" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          $bad = $deps | Where-Object { $_ -match '^(vcruntime|msvcp|vcomp|concrt|ggml|whisper)' }
+          if ($bad) { throw "unexpected dependencies: $($bad -join ', ')" }
+          & $exe -h *> $null
+          if ($LASTEXITCODE -ne 0) { throw "whisper-cli -h exited with $LASTEXITCODE" }
+
+      - name: Package
+        id: pack
+        run: |
+          $asset = "whisper-cli-vulkan-win-x64-$env:WHISPER_TAG.zip"
+          New-Item -ItemType Directory -Force -Path dist/pkg | Out-Null
+          Copy-Item build\bin\Release\whisper-cli.exe dist/pkg/
+          Copy-Item whisper.cpp\LICENSE dist/pkg/LICENSE-whisper.cpp
+          $commit = git -C whisper.cpp rev-parse HEAD
+          @"
+          whisper-cli.exe - whisper.cpp $env:WHISPER_TAG (commit $commit) built with Vulkan
+          Built by GitHub Actions ($env:GITHUB_REPOSITORY, run $env:GITHUB_RUN_ID) on $env:ImageOS / $env:ImageVersion
+          Vulkan SDK $env:VULKAN_VERSION. cmake -A x64 -DGGML_VULKAN=ON -DGGML_NATIVE=OFF -DGGML_OPENMP=OFF
+            -DBUILD_SHARED_LIBS=OFF -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreaded
+          Needs a Vulkan driver (comes with the graphics card driver) and a processor with AVX2.
+          "@ | Set-Content dist/pkg/BUILD-INFO.txt -Encoding utf8
+          Compress-Archive -Path dist/pkg/* -DestinationPath "dist/$asset" -Force
+          $hash = (Get-FileHash "dist/$asset" -Algorithm SHA256).Hash.ToLower()
+          "$hash  $asset" | Set-Content "dist/$asset.sha256" -Encoding ascii
+          "asset=$asset" >> $env:GITHUB_OUTPUT
+          "sha256=$hash" >> $env:GITHUB_OUTPUT
+          "**$asset**`n`nSHA256: ``$hash```n" >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Keep the build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9   # v7.0.2
+        with:
+          name: whisper-cli-vulkan
+          path: dist/*.zip*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    needs: build
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write          # only this job can create the Release
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WHISPER_TAG: ${{ inputs.whisper_tag }}
+      ASSET: ${{ needs.build.outputs.asset }}
+      SHA256: ${{ needs.build.outputs.sha256 }}
+    steps:
+      - name: Get the build
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333   # v8.0.2
+        with:
+          name: whisper-cli-vulkan
+          path: dist
+
+      - name: Check the SHA256 again
+        run: |
+          echo "$SHA256  dist/$ASSET" | sha256sum --check
+
+      - name: Create the Release
+        run: |
+          gh release create "whispercpp-vulkan-$WHISPER_TAG" "dist/$ASSET" "dist/$ASSET.sha256" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "whisper-cli (Vulkan, Windows x64) - whisper.cpp $WHISPER_TAG" \
+            --notes "whisper.cpp $WHISPER_TAG built with Vulkan for VideoLearn's AMD / Intel graphics support. SHA256: \`$SHA256\`. The installer downloads and checks this file by itself." \
+            --latest=false

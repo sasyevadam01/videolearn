@@ -43,11 +43,21 @@ $ProgressPreference = 'SilentlyContinue'      # Invoke-WebRequest is ~10x faster
 $env:UV_SYSTEM_CERTS = '1'
 $env:UV_NATIVE_TLS = '1'
 $Repo = 'sasyevadam01/videolearn'
+# Vulkan engine (AMD / Intel cards): whisper-cli.exe is built by .github/workflows/build-whisper-cli-vulkan.yml and published as a
+# Release asset. $WhisperCliSha256 stays empty until that Release exists; while it is empty nothing is downloaded (use -WhisperCppDir).
+$WhisperCliUrl = "https://github.com/$Repo/releases/download/whispercpp-vulkan-v1.9.5/whisper-cli-vulkan-win-x64-v1.9.5.zip"
+$WhisperCliSha256 = ''
+# SHA256 of the ggml models (huggingface.co/ggerganov/whisper.cpp; checked against a copy that works)
+$GgmlSha256 = @{
+    'ggml-large-v3-turbo.bin'      = '1fc70f774d38eb169993ac391eea357ef47c88757ef72ee5943879b7e8e2bc69'
+    'ggml-large-v3-turbo-q5_0.bin' = '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2'
+}
 $Total = 7
 
 function Step([int]$n, [string]$msg) { Write-Host ''; Write-Host "[$n/$Total] $msg" -ForegroundColor Cyan }
 function Info([string]$msg) { Write-Host "      $msg" -ForegroundColor DarkGray }
 function Download([string]$url, [string]$out) { Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $out }
+function Sha256([string]$path) { (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLower() }
 # Native tools (uv, python) print progress on stderr; do not let that abort the script. Check $LASTEXITCODE instead.
 function Native([scriptblock]$cmd) {
     $old = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
@@ -156,30 +166,54 @@ try {
         if ($NoVulkan -or -not $amdIntel) {
             Info 'no NVIDIA graphics card found: the processor will be used (works fine, just slower)'
         }
-        elseif (-not $WhisperCppDir -or -not (Test-Path (Join-Path $WhisperCppDir 'whisper-cli.exe'))) {
-            Info "graphics card: $($amdIntel[0]). The faster Vulkan engine needs a whisper-cli.exe build (-WhisperCppDir), which was not given:"
-            Info 'the processor will be used (works fine, just slower)'
-        }
         else {
-            Info "graphics card: $($amdIntel[0]): setting up the Vulkan engine (whisper.cpp)"
             $wc = Join-Path $InstallDir 'whispercpp'
-            New-Item -ItemType Directory -Force -Path (Join-Path $wc 'models') | Out-Null
-            Get-ChildItem -LiteralPath $WhisperCppDir -File | Copy-Item -Destination $wc -Force
-            $gg = if ($VulkanModel -eq 'q5') { 'ggml-large-v3-turbo-q5_0.bin' } else { 'ggml-large-v3-turbo.bin' }
-            $ggPath = Join-Path $wc "models\$gg"
-            $given = Join-Path $WhisperCppDir "models\$gg"
-            if (Test-Path $given) { Copy-Item $given $ggPath -Force }
-            if (-not (Test-Path $ggPath)) {
-                if ($SkipModel) { Info "skipped the Vulkan model (-SkipModel): copy $gg to $wc\models to use the Vulkan engine" }
-                else {
-                    $mb = if ($VulkanModel -eq 'q5') { 574 } else { 1625 }
-                    Info "downloading the Vulkan speech model $gg (about $mb MB, one time)"
-                    try { Download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$gg" "$ggPath.part"; Move-Item "$ggPath.part" $ggPath -Force }
-                    catch { Remove-Item "$ggPath.part" -Force -ErrorAction SilentlyContinue
-                            Write-Warning 'The Vulkan model could not be downloaded; the processor will be used.' }
-                }
+            $haveCli = $false
+            if ($WhisperCppDir -and (Test-Path (Join-Path $WhisperCppDir 'whisper-cli.exe'))) {
+                Info "graphics card: $($amdIntel[0]): setting up the Vulkan engine (whisper.cpp) from $WhisperCppDir"
+                New-Item -ItemType Directory -Force -Path $wc | Out-Null
+                Get-ChildItem -LiteralPath $WhisperCppDir -File | Copy-Item -Destination $wc -Force
+                $haveCli = $true
             }
-            # the app checks that Vulkan really runs on the GPU the first time; if not, it uses the processor
+            elseif ($WhisperCliSha256) {
+                Info "graphics card: $($amdIntel[0]): downloading whisper-cli for Vulkan (about 10 MB, checked with SHA256)"
+                $zipWc = Join-Path $tmp 'whisper-cli.zip'
+                try {
+                    Download $WhisperCliUrl $zipWc
+                    if ((Sha256 $zipWc) -ne $WhisperCliSha256.ToLower()) { throw 'the downloaded file does not match its SHA256, it was discarded' }
+                    New-Item -ItemType Directory -Force -Path $wc | Out-Null
+                    Expand-Archive -LiteralPath $zipWc -DestinationPath $wc -Force
+                    $haveCli = Test-Path (Join-Path $wc 'whisper-cli.exe')
+                } catch { Write-Warning "Could not set up the Vulkan engine ($($_.Exception.Message)); the processor will be used." }
+            }
+            else {
+                Info "graphics card: $($amdIntel[0]). The faster Vulkan engine needs a whisper-cli.exe build (-WhisperCppDir), which was not given:"
+                Info 'the processor will be used (works fine, just slower)'
+            }
+            if ($haveCli) {
+                New-Item -ItemType Directory -Force -Path (Join-Path $wc 'models') | Out-Null
+                $gg = if ($VulkanModel -eq 'q5') { 'ggml-large-v3-turbo-q5_0.bin' } else { 'ggml-large-v3-turbo.bin' }
+                $ggPath = Join-Path $wc "models\$gg"
+                if ($WhisperCppDir) {
+                    $given = Join-Path $WhisperCppDir "models\$gg"
+                    if (Test-Path $given) { Copy-Item $given $ggPath -Force }
+                }
+                if (-not (Test-Path $ggPath)) {
+                    if ($SkipModel) { Info "skipped the Vulkan model (-SkipModel): copy $gg to $wc\models to use the Vulkan engine" }
+                    else {
+                        $mb = if ($VulkanModel -eq 'q5') { 574 } else { 1625 }
+                        Info "downloading the Vulkan speech model $gg (about $mb MB, one time)"
+                        try { Download "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/$gg" "$ggPath.part"; Move-Item "$ggPath.part" $ggPath -Force }
+                        catch { Remove-Item "$ggPath.part" -Force -ErrorAction SilentlyContinue
+                                Write-Warning 'The Vulkan model could not be downloaded; the processor will be used.' }
+                    }
+                }
+                if ((Test-Path $ggPath) -and (Sha256 $ggPath) -ne $GgmlSha256[$gg]) {
+                    Remove-Item $ggPath -Force -ErrorAction SilentlyContinue
+                    Write-Warning "The Vulkan model $gg does not match its SHA256, it was removed; the processor will be used."
+                }
+                # the app checks that Vulkan really runs on the GPU the first time; if not, it uses the processor
+            }
         }
     }
     else {
