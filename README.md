@@ -195,7 +195,7 @@ The text is nearly the same; both engines make the same jargon mistakes, which i
 | anything else, or the second engine fails | faster-whisper on the CPU | `large-v3-turbo` (CTranslate2) |
 
 `--engine auto` (CLI), `engine="auto"` (connector's `watch_video`, optional) or the app picks for you. Before using Vulkan the app runs a
-2-second check and confirms that `whisper-cli` really uses the graphics card (a software renderer does not count); the result is
+short check (it loads the model and transcribes 2 s of audio: about 7 s, up to ~25 s the first time the model is read from disk) and confirms that `whisper-cli` really uses the graphics card (a software renderer does not count); the result is
 remembered in `%USERPROFILE%\.videolearn\vulkan_probe.json`. If the check fails, or whisper.cpp fails or takes too long, the app
 continues on the CPU and writes the reason in the log. A forced `--engine vulkan` reports the error instead.
 
