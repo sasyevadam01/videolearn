@@ -74,17 +74,29 @@ jobs:
 
       - name: Check the executable
         run: |
+          # failures are also written as ::error:: annotations, which can be read without logging in
           $exe = "build\bin\Release\whisper-cli.exe"
-          if (-not (Test-Path $exe)) { throw "$exe was not built" }
-          # only Windows system DLLs may be needed (no MSVC runtime, no OpenMP, no ggml DLLs)
-          $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
-          $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\\x64' } | Select-Object -First 1
-          $deps = & $dumpbin.FullName /dependents $exe | Select-String -Pattern '^\s+\S+\.dll\s*$' | ForEach-Object { $_.Line.Trim() }
-          "DLLs needed: $($deps -join ', ')" | Tee-Object -FilePath $env:GITHUB_STEP_SUMMARY -Append
-          $bad = $deps | Where-Object { $_ -match '^(vcruntime|msvcp|vcomp|concrt|ggml|whisper)' }
-          if ($bad) { throw "unexpected dependencies: $($bad -join ', ')" }
-          & $exe -h *> $null
-          if ($LASTEXITCODE -ne 0) { throw "whisper-cli -h exited with $LASTEXITCODE" }
+          try {
+            if (-not (Test-Path $exe)) {
+              throw "$exe was not built; found: $((Get-ChildItem build -Recurse -Filter whisper-cli.exe | ForEach-Object FullName) -join ', ')"
+            }
+            Write-Host "::notice title=exe size::$((Get-Item $exe).Length) bytes"
+            # only Windows system DLLs may be needed (no MSVC runtime, no OpenMP, no ggml DLLs)
+            $vsPath = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+            $dumpbin = Get-ChildItem "$vsPath\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe | Where-Object { $_.FullName -match 'Hostx64\x64' } | Select-Object -First 1
+            if (-not $dumpbin) { throw "dumpbin.exe not found under '$vsPath'" }
+            $deps = @(& $dumpbin.FullName /dependents $exe | Select-String -Pattern '^\s+\S+\.dll\s*$' | ForEach-Object { $_.Line.Trim() })
+            Write-Host "::notice title=DLLs needed::$($deps -join ', ')"
+            "DLLs needed: $($deps -join ', ')" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+            $bad = @($deps | Where-Object { $_ -match '^(vcruntime|msvcp|vcomp|concrt|ggml|whisper)' })
+            if ($bad.Count) { throw "unexpected dependencies: $($bad -join ', ')" }
+            $out = & $exe -h 2>&1 | Out-String
+            Write-Host "::notice title=whisper-cli -h::exit $LASTEXITCODE, $($out.Length) chars"
+            if ($LASTEXITCODE -ne 0) { throw "whisper-cli -h exited with $LASTEXITCODE" }
+          } catch {
+            Write-Host "::error title=Check the executable::$($_.Exception.Message -replace '\r?\n',' | ')"
+            throw
+          }
 
       - name: Package
         id: pack
@@ -104,6 +116,7 @@ jobs:
           Compress-Archive -Path dist/pkg/* -DestinationPath "dist/$asset" -Force
           $hash = (Get-FileHash "dist/$asset" -Algorithm SHA256).Hash.ToLower()
           "$hash  $asset" | Set-Content "dist/$asset.sha256" -Encoding ascii
+          Write-Host "::notice title=SHA256 of $asset::$hash"
           "asset=$asset" >> $env:GITHUB_OUTPUT
           "sha256=$hash" >> $env:GITHUB_OUTPUT
           "**$asset**`n`nSHA256: ``$hash```n" >> $env:GITHUB_STEP_SUMMARY
