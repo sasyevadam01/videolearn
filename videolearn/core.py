@@ -249,11 +249,11 @@ def _run_whisper(wav: Path, model: str, language: str | None, device: str, promp
 ENGINES = ("auto", "cuda", "vulkan", "cpu")
 
 
-def engine_hint() -> str:
-    """Engine `auto` would try first, without starting anything: "cuda", "vulkan" or "cpu" (for the app's time estimate)."""
+def engine_hint(model: str = "large-v3-turbo") -> str:
+    """Engine `auto` would try first for `model`, without starting anything: "cuda", "vulkan" or "cpu" (for the app's time estimate)."""
     if gpu_possible():
         return "cuda"
-    return "vulkan" if engines.vulkan_candidate() else "cpu"
+    return "vulkan" if engines.vulkan_candidate(model) else "cpu"
 
 
 def _run_vulkan(wav: Path, model: str, language: str | None, prompt: str | None, progress, log):

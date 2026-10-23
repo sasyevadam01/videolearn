@@ -16,6 +16,8 @@ foreach ($dir in @([Environment]::GetFolderPath('Desktop'), (Join-Path $env:APPD
     Remove-Item -LiteralPath (Join-Path $dir 'VideoLearn.lnk') -Force -ErrorAction SilentlyContinue
 }
 Remove-Item -LiteralPath $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
+# the Vulkan check result belongs to the whisper.cpp copy that was just removed (it lives in the install folder)
+Remove-Item -LiteralPath (Join-Path $HOME '.videolearn\vulkan_probe.json') -Force -ErrorAction SilentlyContinue
 if ($RemoveUserData) { Remove-Item -LiteralPath (Join-Path $HOME '.videolearn') -Recurse -Force -ErrorAction SilentlyContinue }
 if ($RemoveModels) {
     Get-ChildItem (Join-Path $HOME '.cache\huggingface\hub') -Directory -Filter 'models--*faster-whisper*' -ErrorAction SilentlyContinue |

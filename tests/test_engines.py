@@ -174,6 +174,29 @@ class EngineChoiceTest(unittest.TestCase):
             self.run_t(engine="metal")
 
 
+class EngineHintTest(unittest.TestCase):
+    """The app's time estimate must know which engine will run, for the model it will use."""
+
+    def hint(self, model, *, nvidia=False, vendors=("amd",), models=("ggml-large-v3-turbo.bin",), cli=True):
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, {"VIDEOLEARN_WHISPERCPP_DIR": tmp}),                 mock.patch.object(core, "gpu_possible", return_value=nvidia),                 mock.patch.object(engines, "gpu_vendors", return_value=vendors):
+            (Path(tmp) / "models").mkdir()
+            for m in models:
+                (Path(tmp) / "models" / m).write_bytes(b"x")
+            if cli:
+                (Path(tmp) / "whisper-cli.exe").write_bytes(b"x")
+            return core.engine_hint(model)
+
+    def test_vulkan_only_when_everything_is_installed_for_that_model(self):
+        self.assertEqual(self.hint("large-v3-turbo"), "vulkan")
+        self.assertEqual(self.hint("small"), "cpu")                       # no ggml-small: the processor will run
+        self.assertEqual(self.hint("large-v3-turbo", cli=False), "cpu")
+        self.assertEqual(self.hint("large-v3-turbo", vendors=()), "cpu")
+        self.assertEqual(self.hint("large-v3-turbo", vendors=("nvidia",)), "cpu")
+
+    def test_nvidia_wins(self):
+        self.assertEqual(self.hint("large-v3-turbo", nvidia=True), "cuda")
+
+
 class CliTest(unittest.TestCase):
     def test_engine_option_reaches_process(self):
         with mock.patch.object(cli, "process", return_value=Path("R.md")) as proc:

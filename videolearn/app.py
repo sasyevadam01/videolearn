@@ -34,7 +34,7 @@ PORTS = range(8765, 8786)
 IDLE_SECONDS = 120
 
 JOB: dict = {"running": False, "step": "", "frac": 0.0, "error": None, "out": None, "id": None,
-             "video": None, "duration": None, "model": None, "gpu": False}
+             "video": None, "duration": None, "model": None, "gpu": False, "engine": "cpu"}
 REG: dict[str, dict] = {}           # report id -> {"out": Path, "video": Path}
 BEAT = [time.time() + 60]           # last time the window said "I'm here" (first visit: grace period)
 PICK_LOCK = threading.Lock()
@@ -230,7 +230,7 @@ class Handler(BaseHTTPRequestHandler):
             model = "small" if b.get("model") == "small" else "large-v3-turbo"
             JOB.update(running=True, step="audio", frac=0.0, error=None, out=None, id=None,
                        video=video.name, duration=video_duration(video), model=model,
-                       gpu=engine_hint() != "cpu")
+                       engine=hint, gpu=hint != "cpu")
             threading.Thread(target=run_job, args=(video, model, str(b.get("language", "auto"))), daemon=True).start()
             return self._json({"ok": True})
         if p == "/api/open":

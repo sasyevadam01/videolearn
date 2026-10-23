@@ -365,7 +365,9 @@ function paintBusy(j){
   $('#busyTitle').textContent = err ? t('busyFail') : t('busyTitle');
   if (err) $('#busyErr').textContent = t('failPrefix') + j.error;
   if (j.duration && !err){
-    const k = j.gpu ? 0.08 : (j.model === 'small' ? 0.2 : 0.5);      // seconds of work per second of video
+    // seconds of work per second of video, whole pipeline. NVIDIA: 0.08. Vulkan (AMD/Intel): 0.2, measured on a Ryzen 7 255 +
+    // Radeon 780M (0.19 on a 2 min 43 s recording, 0.25 on a 38 s clip). CPU: 0.5 (0.2 for the small model), a cautious figure.
+    const k = j.engine === 'vulkan' ? 0.2 : (j.gpu ? 0.08 : (j.model === 'small' ? 0.2 : 0.5));
     const min = j.duration * k / 60;
     $('#eta').textContent = (min < 1 ? t('etaLess') : t('etaMin', Math.round(min))) + (j.gpu ? t('etaGpu') : '');
   } else $('#eta').textContent = '';
